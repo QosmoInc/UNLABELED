@@ -17,23 +17,35 @@ Usage:
     Example: python train_patch_inria.py paper_obj
 """
 
-import PIL
-import load_data
-from tqdm import tqdm
-
-from load_data import *
-# from unity_dataset import UnityDataset
-import gc
-# import matplotlib.pyplot as plt
-from torch import autograd
-from torchvision import transforms
-from torch.utils.tensorboard import SummaryWriter
-import torchvision
-import subprocess
-
-import patch_config
+import os
 import sys
 import time
+import gc
+import subprocess
+
+import torch
+import torch.optim as optim
+import torch.autograd as autograd
+import torch.nn.functional as F
+import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
+import torchvision
+from PIL import Image
+# import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+import patch_config
+# from unity_dataset import UnityDataset
+from load_data import (
+    Darknet,
+    InriaDataset,
+    PatchTransformer,
+    PatchApplier,
+    MaxProbExtractor,
+    AdaINStyleLoss,
+    ContentLoss,
+    TotalVariation
+)
 
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -107,8 +119,10 @@ class PatchTrainer(object):
         # adv_patch_cpu = self.read_image('imgs/01.png')
         # orig_img = self.read_image('imgs/bear2.jpg').to(device)
         # orig_img_style = self.read_image('imgs/FXBwRoBZ.jpeg').to(device)
-        orig_img = self.read_image('imgs/210831_meisai+.jpg').to(device)
-        orig_img_style = self.read_image('imgs/210831_meisai+.jpg').to(device)
+        # orig_img = self.read_image('imgs/210831_meisai+.jpg').to(device)
+        # orig_img_style = self.read_image('imgs/210831_meisai+.jpg').to(device)
+        orig_img = self.read_image('imgs/2025_11_22/01-1.jpg').to(device)
+        orig_img_style = self.read_image('imgs/2025_11_22/01-1.jpg').to(device)
 
         adv_patch_cpu.requires_grad_(True)
         self.save_patch(adv_patch_cpu, 0, 0)

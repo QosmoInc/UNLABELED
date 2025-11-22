@@ -8,10 +8,20 @@ import PIL
 import load_data
 from tqdm import tqdm
 
-from load_data import *
-from unity_dataset import UnityDataset
+from load_data import (
+    Darknet,
+    InriaDataset,
+    PatchTransformer,
+    PatchApplier,
+    MaxProbExtractor,
+    AdaINStyleLoss,
+    ContentLoss,
+    TotalVariation
+)
+# from unity_dataset import UnityDataset  # Not used in this script
 import gc
 import matplotlib.pyplot as plt
+import torch
 from torch import autograd
 from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
