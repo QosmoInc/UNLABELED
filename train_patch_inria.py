@@ -1,7 +1,20 @@
 """
-Training code for Adversarial patch training
+Training code for Adversarial Patch Training on INRIA Person Dataset
 
+This script trains adversarial patches to fool YOLOv2 person detection models.
+Based on the paper: "Fooling automated surveillance cameras: adversarial patches
+to attack person detection" (CVPRW 2019).
 
+Main training script using:
+- INRIA Person Dataset for realistic person images
+- YOLOv2 MS COCO weights for detection
+- Various loss functions: detection loss, style loss, content loss, TV loss
+
+Usage:
+    python train_patch_inria.py <config_name>
+
+    where <config_name> is a key from patch_config.patch_configs
+    Example: python train_patch_inria.py paper_obj
 """
 
 import PIL
@@ -28,7 +41,22 @@ print('device: {}'.format(device))
 
 
 class PatchTrainer(object):
+    """Main trainer class for adversarial patch generation.
+
+    Manages the training loop, loss calculation, and patch optimization.
+    Combines multiple loss components:
+    - Detection loss: maximize/minimize target class probability
+    - AdaIN style loss: match style of reference image
+    - Content loss: preserve content structure
+    - Total Variation loss: smooth patch appearance
+    """
+
     def __init__(self, mode):
+        """Initialize trainer with configuration.
+
+        Args:
+            mode: Configuration name from patch_config.patch_configs
+        """
         self.config = patch_config.patch_configs[mode]()
         self.config.patch_size = 600
         self.config.batch_size = 4
