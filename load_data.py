@@ -321,27 +321,6 @@ class PatchApplier(nn.Module):
             img_batch = torch.where((adv == 0), img_batch, adv)
         return img_batch
 
-'''
-class PatchGenerator(nn.Module):
-    """PatchGenerator: network module that generates adversarial patches.
-
-    Module representing the neural network that will generate adversarial patches.
-
-    """
-
-    def __init__(self, cfgfile, weightfile, img_dir, lab_dir):
-        super(PatchGenerator, self).__init__()
-        self.yolo = Darknet(cfgfile).load_weights(weightfile)
-        self.dataloader = torch.utils.data.DataLoader(InriaDataset(img_dir, lab_dir, shuffle=True),
-                                                      batch_size=5,
-                                                      shuffle=True)
-        self.patchapplier = PatchApplier()
-        self.nmscalculator = NMSCalculator()
-        self.totalvariation = TotalVariation()
-
-    def forward(self, *input):
-        pass
-'''
 
 class InriaDataset(Dataset):
     """InriaDataset: representation of the INRIA person dataset.
