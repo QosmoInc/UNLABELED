@@ -45,16 +45,40 @@ class BasePatchTrainer(ABC):
         Args:
             mode: Configuration name from patch_config.patch_configs
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
+
+        Raises:
+            ValueError: If mode is not found in patch_configs
+            FileNotFoundError: If required config files don't exist
         """
+        # Validate mode exists
+        if mode not in patch_config.patch_configs:
+            available_modes = ', '.join(patch_config.patch_configs.keys())
+            raise ValueError(
+                f"Unknown mode '{mode}'. Available modes: {available_modes}"
+            )
+
         # Load configuration
         self.config: Any = patch_config.patch_configs[mode]()
         self.mode: str = mode
 
-        # Device setup
+        # Validate configuration
+        self._validate_config()
+
+        # Device setup with fallback
         if device is None:
-            self.device: str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            if torch.cuda.is_available():
+                self.device: str = 'cuda:0'
+                print('✓ CUDA available - using GPU')
+            else:
+                self.device = 'cpu'
+                print('⚠ CUDA not available - falling back to CPU (training will be slower)')
         else:
             self.device = device
+            if 'cuda' in device and not torch.cuda.is_available():
+                print(f'⚠ WARNING: Requested device "{device}" but CUDA not available')
+                print('  Falling back to CPU')
+                self.device = 'cpu'
+
         print(f'Device: {self.device}')
         print(self.config)
         print('=' * 40)
@@ -74,6 +98,50 @@ class BasePatchTrainer(ABC):
 
         # Track epoch length for logging
         self.epoch_length: int = 0
+
+    def _validate_config(self) -> None:
+        """Validate configuration parameters.
+
+        Raises:
+            FileNotFoundError: If required files don't exist
+            ValueError: If parameters are invalid
+        """
+        # Check required files exist
+        if not os.path.exists(self.config.cfgfile):
+            raise FileNotFoundError(
+                f"YOLO config file not found: {self.config.cfgfile}"
+            )
+
+        if not os.path.exists(self.config.weightfile):
+            raise FileNotFoundError(
+                f"YOLO weights file not found: {self.config.weightfile}"
+            )
+
+        if not os.path.exists(self.config.img_dir):
+            raise FileNotFoundError(
+                f"Image directory not found: {self.config.img_dir}"
+            )
+
+        if not os.path.exists(self.config.lab_dir):
+            raise FileNotFoundError(
+                f"Label directory not found: {self.config.lab_dir}"
+            )
+
+        # Validate parameter values
+        if self.config.patch_size <= 0:
+            raise ValueError(
+                f"patch_size must be positive, got {self.config.patch_size}"
+            )
+
+        if self.config.batch_size <= 0:
+            raise ValueError(
+                f"batch_size must be positive, got {self.config.batch_size}"
+            )
+
+        if self.config.start_learning_rate <= 0:
+            raise ValueError(
+                f"start_learning_rate must be positive, got {self.config.start_learning_rate}"
+            )
 
     def init_tensorboard(self, name: Optional[str] = None) -> SummaryWriter:
         """Initialize TensorBoard logging.
@@ -130,8 +198,18 @@ class BasePatchTrainer(ABC):
 
         Returns:
             torch.Tensor: Image tensor resized to (3, patch_size, patch_size)
+
+        Raises:
+            FileNotFoundError: If image file doesn't exist
+            ValueError: If image file is invalid or corrupted
         """
-        patch_img = Image.open(path).convert('RGB')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Image file not found: {path}")
+
+        try:
+            patch_img = Image.open(path).convert('RGB')
+        except Exception as e:
+            raise ValueError(f"Failed to open image {path}: {str(e)}")
 
         # Resize to patch size
         tf = transforms.Resize((self.config.patch_size, self.config.patch_size))
@@ -150,12 +228,18 @@ class BasePatchTrainer(ABC):
             adv_patch_cpu: Patch tensor to save
             epoch: Current epoch number (used in filename)
             ep_det_loss: Optional detection loss value (included in filename)
+
+        Raises:
+            OSError: If directory creation or file save fails
         """
         im = transforms.ToPILImage('RGB')(adv_patch_cpu)
 
         # Ensure output directory exists
-        if not os.path.exists('pics'):
-            os.mkdir('pics')
+        try:
+            if not os.path.exists('pics'):
+                os.makedirs('pics', exist_ok=True)
+        except OSError as e:
+            raise OSError(f"Failed to create output directory 'pics': {str(e)}")
 
         # Create filename with epoch and optional loss value
         if ep_det_loss is not None:
@@ -163,7 +247,10 @@ class BasePatchTrainer(ABC):
         else:
             filename = f'pics/{epoch}.png'
 
-        im.save(filename, quality=100)
+        try:
+            im.save(filename, quality=100)
+        except Exception as e:
+            raise OSError(f"Failed to save patch to {filename}: {str(e)}")
 
     def save_best_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, det_loss: float) -> None:
         """Save the best performing patch so far.
@@ -172,14 +259,24 @@ class BasePatchTrainer(ABC):
             adv_patch_cpu: Patch tensor to save
             epoch: Current epoch number
             det_loss: Detection loss value
+
+        Raises:
+            OSError: If directory creation or file save fails
         """
         im = transforms.ToPILImage('RGB')(adv_patch_cpu)
 
         # Ensure output directory exists
-        if not os.path.exists('pics'):
-            os.mkdir('pics')
+        try:
+            if not os.path.exists('pics'):
+                os.makedirs('pics', exist_ok=True)
+        except OSError as e:
+            raise OSError(f"Failed to create output directory 'pics': {str(e)}")
 
-        im.save(f'pics/best_{epoch}_{det_loss}.png', quality=100)
+        filename = f'pics/best_{epoch}_{det_loss}.png'
+        try:
+            im.save(filename, quality=100)
+        except Exception as e:
+            raise OSError(f"Failed to save best patch to {filename}: {str(e)}")
 
     def cleanup_memory(self, *tensors: Any) -> None:
         """Clean up GPU memory by deleting tensors and clearing cache.
