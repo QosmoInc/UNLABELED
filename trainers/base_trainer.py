@@ -8,6 +8,7 @@ import os
 import time
 import subprocess
 from abc import ABC, abstractmethod
+from typing import Optional, Any
 
 import torch
 import torchvision.transforms as transforms
@@ -38,7 +39,7 @@ class BasePatchTrainer(ABC):
     Subclasses must implement the train() method with dataset-specific logic.
     """
 
-    def __init__(self, mode: str, device: str = None):
+    def __init__(self, mode: str, device: Optional[str] = None) -> None:
         """Initialize the patch trainer.
 
         Args:
@@ -46,12 +47,12 @@ class BasePatchTrainer(ABC):
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
         # Load configuration
-        self.config = patch_config.patch_configs[mode]()
-        self.mode = mode
+        self.config: Any = patch_config.patch_configs[mode]()
+        self.mode: str = mode
 
         # Device setup
         if device is None:
-            self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            self.device: str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         else:
             self.device = device
         print(f'Device: {self.device}')
@@ -59,22 +60,22 @@ class BasePatchTrainer(ABC):
         print('=' * 40)
 
         # Initialize YOLO detection model
-        self.darknet_model = Darknet(self.config.cfgfile)
+        self.darknet_model: Darknet = Darknet(self.config.cfgfile)
         self.darknet_model.load_weights(self.config.weightfile)
         # Set to eval mode to disable dropout/batch norm training behavior
         self.darknet_model = self.darknet_model.eval().to(self.device)
 
         # Initialize patch transformation modules
-        self.patch_applier = PatchApplier().to(self.device)
-        self.patch_transformer = PatchTransformer().to(self.device)
+        self.patch_applier: PatchApplier = PatchApplier().to(self.device)
+        self.patch_transformer: PatchTransformer = PatchTransformer().to(self.device)
 
         # Initialize TensorBoard writer
-        self.writer = self.init_tensorboard(mode)
+        self.writer: SummaryWriter = self.init_tensorboard(mode)
 
         # Track epoch length for logging
-        self.epoch_length = 0
+        self.epoch_length: int = 0
 
-    def init_tensorboard(self, name: str = None):
+    def init_tensorboard(self, name: Optional[str] = None) -> SummaryWriter:
         """Initialize TensorBoard logging.
 
         Args:
@@ -96,7 +97,7 @@ class BasePatchTrainer(ABC):
         else:
             return SummaryWriter()
 
-    def generate_patch(self, patch_type: str = 'gray'):
+    def generate_patch(self, patch_type: str = 'gray') -> torch.Tensor:
         """Generate an initial patch as starting point for optimization.
 
         Args:
@@ -121,7 +122,7 @@ class BasePatchTrainer(ABC):
 
         return adv_patch_cpu
 
-    def read_image(self, path: str):
+    def read_image(self, path: str) -> torch.Tensor:
         """Read an image file and convert it to a patch tensor.
 
         Args:
@@ -142,7 +143,7 @@ class BasePatchTrainer(ABC):
 
         return adv_patch_cpu
 
-    def save_patch(self, adv_patch_cpu, epoch: int, ep_det_loss: float = None):
+    def save_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, ep_det_loss: Optional[float] = None) -> None:
         """Save the current patch to disk.
 
         Args:
@@ -164,7 +165,7 @@ class BasePatchTrainer(ABC):
 
         im.save(filename, quality=100)
 
-    def save_best_patch(self, adv_patch_cpu, epoch: int, det_loss: float):
+    def save_best_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, det_loss: float) -> None:
         """Save the best performing patch so far.
 
         Args:
@@ -180,7 +181,7 @@ class BasePatchTrainer(ABC):
 
         im.save(f'pics/best_{epoch}_{det_loss}.png', quality=100)
 
-    def cleanup_memory(self, *tensors):
+    def cleanup_memory(self, *tensors: Any) -> None:
         """Clean up GPU memory by deleting tensors and clearing cache.
 
         Args:
@@ -192,7 +193,7 @@ class BasePatchTrainer(ABC):
             torch.cuda.empty_cache()
 
     @abstractmethod
-    def train(self):
+    def train(self) -> None:
         """Train the adversarial patch.
 
         This method must be implemented by subclasses with dataset-specific

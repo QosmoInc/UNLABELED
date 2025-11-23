@@ -6,6 +6,8 @@ the INRIA person dataset for adversarial patch training.
 
 import fnmatch
 import os
+from typing import Tuple, List
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -29,31 +31,31 @@ class InriaDataset(Dataset):
 
     """
 
-    def __init__(self, img_dir, lab_dir, max_lab, imgsize, shuffle=True):
+    def __init__(self, img_dir: str, lab_dir: str, max_lab: int, imgsize: int, shuffle: bool = True) -> None:
         n_png_images = len(fnmatch.filter(os.listdir(img_dir), '*.png'))
         n_jpg_images = len(fnmatch.filter(os.listdir(img_dir), '*.jpg'))
         n_images = n_png_images + n_jpg_images
         n_labels = len(fnmatch.filter(os.listdir(lab_dir), '*.txt'))
         assert n_images == n_labels, "Number of images and number of labels don't match"
-        self.len = n_images
-        self.img_dir = img_dir
-        self.lab_dir = lab_dir
-        self.imgsize = imgsize
-        self.img_names = fnmatch.filter(os.listdir(img_dir), '*.png') + fnmatch.filter(os.listdir(img_dir), '*.jpg')
-        self.shuffle = shuffle
-        self.img_paths = []
+        self.len: int = n_images
+        self.img_dir: str = img_dir
+        self.lab_dir: str = lab_dir
+        self.imgsize: int = imgsize
+        self.img_names: List[str] = fnmatch.filter(os.listdir(img_dir), '*.png') + fnmatch.filter(os.listdir(img_dir), '*.jpg')
+        self.shuffle: bool = shuffle
+        self.img_paths: List[str] = []
         for img_name in self.img_names:
             self.img_paths.append(os.path.join(self.img_dir, img_name))
-        self.lab_paths = []
+        self.lab_paths: List[str] = []
         for img_name in self.img_names:
             lab_path = os.path.join(self.lab_dir, img_name).replace('.jpg', '.txt').replace('.png', '.txt')
             self.lab_paths.append(lab_path)
-        self.max_n_labels = max_lab
+        self.max_n_labels: int = max_lab
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.len
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         assert idx <= len(self), 'index range error'
         img_path = os.path.join(self.img_dir, self.img_names[idx])
         lab_path = os.path.join(self.lab_dir, self.img_names[idx]).replace('.jpg', '.txt').replace('.png', '.txt')
@@ -73,14 +75,15 @@ class InriaDataset(Dataset):
         label = self.pad_lab(label)
         return image, label
 
-    def pad_and_scale(self, img, lab):
-        """
+    def pad_and_scale(self, img: Image.Image, lab: torch.Tensor) -> Tuple[Image.Image, torch.Tensor]:
+        """Pad and scale image to square dimensions.
 
         Args:
-            img:
+            img: Input PIL image
+            lab: Label tensor
 
         Returns:
-
+            Tuple of padded image and adjusted labels
         """
         w,h = img.size
         if w==h:
@@ -103,7 +106,15 @@ class InriaDataset(Dataset):
         padded_img = resize(padded_img)     #choose here
         return padded_img, lab
 
-    def pad_lab(self, lab):
+    def pad_lab(self, lab: torch.Tensor) -> torch.Tensor:
+        """Pad label tensor to fixed size.
+
+        Args:
+            lab: Label tensor
+
+        Returns:
+            Padded label tensor
+        """
         pad_size = self.max_n_labels - lab.shape[0]
         if(pad_size>0):
             padded_lab = F.pad(lab, (0, 0, 0, pad_size), value=1)

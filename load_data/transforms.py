@@ -7,6 +7,8 @@ This module contains classes for transforming and applying adversarial patches:
 """
 
 import math
+from typing import Any
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -28,16 +30,16 @@ class PatchTransformer(nn.Module):
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(PatchTransformer, self).__init__()
-        self.min_contrast = 0.8
-        self.max_contrast = 1.2
-        self.min_brightness = -0.1
-        self.max_brightness = 0.1
-        self.noise_factor = 0.10
-        self.minangle = -20 / 180 * math.pi
-        self.maxangle = 20 / 180 * math.pi
-        self.medianpooler = MedianPool2d(7,same=True)
+        self.min_contrast: float = 0.8
+        self.max_contrast: float = 1.2
+        self.min_brightness: float = -0.1
+        self.max_brightness: float = 0.1
+        self.noise_factor: float = 0.10
+        self.minangle: float = -20 / 180 * math.pi
+        self.maxangle: float = 20 / 180 * math.pi
+        self.medianpooler: MedianPool2d = MedianPool2d(7,same=True)
         '''
         kernel = torch.cuda.FloatTensor([[0.003765, 0.015019, 0.023792, 0.015019, 0.003765],
                                          [0.015019, 0.059912, 0.094907, 0.059912, 0.015019],
@@ -46,7 +48,7 @@ class PatchTransformer(nn.Module):
                                          [0.003765, 0.015019, 0.023792, 0.015019, 0.003765]])
         self.kernel = kernel.unsqueeze(0).unsqueeze(0).expand(3,3,-1,-1)
         '''
-    def forward(self, adv_patch, lab_batch, img_size, do_rotate=True, rand_loc=True):
+    def forward(self, adv_patch: torch.Tensor, lab_batch: torch.Tensor, img_size: int, do_rotate: bool = True, rand_loc: bool = True) -> torch.Tensor:
         #adv_patch = F.conv2d(adv_patch.unsqueeze(0),self.kernel,padding=(2,2))
         adv_patch = self.medianpooler(adv_patch.unsqueeze(0))
         # Determine size of padding
@@ -184,10 +186,10 @@ class PatchApplier(nn.Module):
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(PatchApplier, self).__init__()
 
-    def forward(self, img_batch, adv_batch):
+    def forward(self, img_batch: torch.Tensor, adv_batch: torch.Tensor) -> torch.Tensor:
         advs = torch.unbind(adv_batch, 1)
         for adv in advs:
             img_batch = torch.where((adv == 0), img_batch, adv)
@@ -201,11 +203,11 @@ class PatchGenerator(nn.Module):
     but is reserved for future use or alternative patch generation methods.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(PatchGenerator, self).__init__()
         # Future implementation
         pass
 
-    def forward(self):
+    def forward(self) -> Any:
         # Future implementation
         pass

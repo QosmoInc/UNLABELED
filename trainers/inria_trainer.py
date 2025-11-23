@@ -5,6 +5,8 @@ multiple loss functions including detection loss, style loss, content loss,
 and total variation loss.
 """
 
+from typing import Optional
+
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -32,7 +34,7 @@ class InriaPatchTrainer(BasePatchTrainer):
     - TensorBoard logging and checkpoint saving
     """
 
-    def __init__(self, mode: str, device: str = None):
+    def __init__(self, mode: str, device: Optional[str] = None) -> None:
         """Initialize INRIA trainer.
 
         Args:
@@ -43,12 +45,12 @@ class InriaPatchTrainer(BasePatchTrainer):
 
         # Initialize INRIA-specific loss functions
         # Person class ID is 0 in COCO dataset (80 classes total)
-        self.prob_extractor = MaxProbExtractor(0, 80, self.config).to(self.device)
-        self.adaIN_style_loss = AdaINStyleLoss().to(self.device)
-        self.content_loss = ContentLoss().to(self.device)
-        self.total_variation = TotalVariation().to(self.device)
+        self.prob_extractor: MaxProbExtractor = MaxProbExtractor(0, 80, self.config).to(self.device)
+        self.adaIN_style_loss: AdaINStyleLoss = AdaINStyleLoss().to(self.device)
+        self.content_loss: ContentLoss = ContentLoss().to(self.device)
+        self.total_variation: TotalVariation = TotalVariation().to(self.device)
 
-    def train(self):
+    def train(self) -> None:
         """Train adversarial patch on INRIA Person Dataset.
 
         Implements the full training loop with:

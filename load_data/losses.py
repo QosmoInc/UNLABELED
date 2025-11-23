@@ -8,6 +8,8 @@ This module contains various loss functions used in adversarial patch generation
 - AdaINStyleLoss: Adaptive Instance Normalization style loss
 """
 
+from typing import Any, List, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -22,13 +24,13 @@ class MaxProbExtractor(nn.Module):
 
     """
 
-    def __init__(self, cls_id, num_cls, config):
+    def __init__(self, cls_id: int, num_cls: int, config: Any) -> None:
         super(MaxProbExtractor, self).__init__()
-        self.cls_id = cls_id
-        self.num_cls = num_cls
-        self.config = config
+        self.cls_id: int = cls_id
+        self.num_cls: int = num_cls
+        self.config: Any = config
 
-    def forward(self, YOLOoutput):
+    def forward(self, YOLOoutput: torch.Tensor) -> torch.Tensor:
         # get values neccesary for transformation
         if YOLOoutput.dim() == 3:
             YOLOoutput = YOLOoutput.unsqueeze(0)
@@ -62,11 +64,11 @@ class NPSCalculator(nn.Module):
 
     """
 
-    def __init__(self, printability_file, patch_side):
+    def __init__(self, printability_file: str, patch_side: int) -> None:
         super(NPSCalculator, self).__init__()
         self.printability_array = nn.Parameter(self.get_printability_array(printability_file, patch_side),requires_grad=False)
 
-    def forward(self, adv_patch):
+    def forward(self, adv_patch: torch.Tensor) -> torch.Tensor:
         # calculate euclidian distance between colors in patch and colors in printability_array
         # square root of sum of squared difference
         color_dist = (adv_patch - self.printability_array+0.000001)
@@ -80,7 +82,7 @@ class NPSCalculator(nn.Module):
         nps_score = torch.sum(nps_score,0)
         return nps_score/torch.numel(adv_patch)
 
-    def get_printability_array(self, printability_file, side):
+    def get_printability_array(self, printability_file: str, side: int) -> torch.Tensor:
         printability_list = []
 
         # read in printability triplets and put them in a list
@@ -110,10 +112,10 @@ class TotalVariation(nn.Module):
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(TotalVariation, self).__init__()
 
-    def forward(self, adv_patch):
+    def forward(self, adv_patch: torch.Tensor) -> torch.Tensor:
         # bereken de total variation van de adv_patch
         tvcomp1 = torch.sum(torch.abs(adv_patch[:, :, 1:] - adv_patch[:, :, :-1]+0.000001),0)
         tvcomp1 = torch.sum(torch.sum(tvcomp1,0),0)
@@ -127,10 +129,10 @@ class ContentLoss(nn.Module):
     """ContentLoss: calculates the content loss.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(ContentLoss, self).__init__()
 
-    def forward(self, adv_patch, orig_img):
+    def forward(self, adv_patch: torch.Tensor, orig_img: torch.Tensor) -> torch.Tensor:
         return F.mse_loss(adv_patch, orig_img)
 
 
@@ -141,28 +143,28 @@ class AdaINStyleLoss(nn.Module):
     feature statistics (mean and standard deviation).
     """
 
-    def __init__(self, device='cuda:0'):
+    def __init__(self, device: str = 'cuda:0') -> None:
         super(AdaINStyleLoss, self).__init__()
         encoder_layers = list(models.vgg19(pretrained=True).features)
         encoder_1 = torch.nn.Sequential(*encoder_layers[:2])
         encoder_2 = torch.nn.Sequential(*encoder_layers[2:8])
         encoder_3 = torch.nn.Sequential(*encoder_layers[8:14])
         encoder_4 = torch.nn.Sequential(*encoder_layers[14:26])
-        self.encoder_layers_list = [
+        self.encoder_layers_list: List[torch.nn.Sequential] = [
             encoder_1.to(device),
             encoder_2.to(device),
             encoder_3.to(device),
             encoder_4.to(device),
         ]
 
-    def _encode(self, input):
+    def _encode(self, input: torch.Tensor) -> List[torch.Tensor]:
         outputs = [input]
         for encoder_layer in self.encoder_layers_list:
             input = encoder_layer(input)
             outputs.append(input)
         return outputs
 
-    def _statistics(self, features):
+    def _statistics(self, features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         size = features.size()
         batch_size, n_channels = size[0], size[1]
         features_flatten = features.view(
@@ -176,7 +178,7 @@ class AdaINStyleLoss(nn.Module):
         std = features_var.sqrt().view(batch_size, n_channels, 1, 1)
         return mean, std
 
-    def forward(self, content, style):
+    def forward(self, content: torch.Tensor, style: torch.Tensor) -> torch.Tensor:
         content_features_list = self._encode(content)
         style_features_list = self._encode(style)
 
