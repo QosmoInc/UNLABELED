@@ -91,7 +91,7 @@ class UnityPatchTrainer(BasePatchTrainer):
         adv_patch_cpu.requires_grad_(True)
 
         # Save initial patch
-        self.save_patch(adv_patch_cpu, 0)
+        last_patch_path = self.save_patch(adv_patch_cpu, 0)
 
         # Initialize Unity dataset
         dataset = UnityDataset(
@@ -128,7 +128,7 @@ class UnityPatchTrainer(BasePatchTrainer):
             bt0 = time.time()
 
             # Regenerate dataset with current patch
-            dataset.create_next_dataset(f'pics/{epoch - 1}.png')
+            dataset.create_next_dataset(str(last_patch_path))
 
             for i_batch, img_batch in tqdm(
                 enumerate(train_loader),
@@ -203,7 +203,7 @@ class UnityPatchTrainer(BasePatchTrainer):
             ep_loss = ep_loss / len(train_loader)
 
             # Save patch for this epoch
-            self.save_patch(adv_patch_cpu, epoch, ep_det_loss)
+            last_patch_path = self.save_patch(adv_patch_cpu, epoch, ep_det_loss)
 
             # Log epoch-level metrics
             self.tracker.log_scalars({

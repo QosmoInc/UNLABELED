@@ -154,19 +154,22 @@ class BasePatchTrainer(ABC):
 
         return adv_patch_cpu
 
-    def save_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, ep_det_loss: Optional[float] = None) -> None:
+    def save_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, ep_det_loss: Optional[float] = None) -> Any:
         """Save the current patch to disk and track as artifact.
 
         Args:
             adv_patch_cpu: Patch tensor to save
             epoch: Current epoch number (used in filename)
             ep_det_loss: Optional detection loss value (included in filename)
+
+        Returns:
+            Path to saved patch file
         """
         if ep_det_loss is None:
             ep_det_loss = 0.0
 
         # Save using experiment tracker
-        self.tracker.save_patch_artifact(
+        return self.tracker.save_patch_artifact(
             patch=adv_patch_cpu,
             epoch=epoch,
             loss=ep_det_loss,

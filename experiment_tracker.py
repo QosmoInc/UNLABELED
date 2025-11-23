@@ -29,6 +29,7 @@ Example:
 from __future__ import annotations
 
 import time
+import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 
@@ -79,6 +80,14 @@ class ExperimentTracker:
         self.config = config
         self.experiment_name = experiment_name or config.patch.name
         self.enable_wandb = enable_wandb and WANDB_AVAILABLE
+
+        # Create timestamped output directory for this run
+        time_str = time.strftime("%Y%m%d_%H%M%S")
+        self.output_dir = Path('outputs') / time_str
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save configuration to YAML file for reference
+        self._save_config_file()
 
         # WandB initialization
         self.wandb_run: Optional[Any] = None
@@ -145,6 +154,42 @@ class ExperimentTracker:
             print('  Continuing without experiment tracking...')
             self.enable_wandb = False
             self.wandb_run = None
+
+    def _save_config_file(self) -> None:
+        """Save training configuration to YAML file in output directory.
+
+        This creates a config.yaml file that documents all settings used
+        for this training run, making it easy to reproduce results later.
+        """
+        config_path = self.output_dir / 'config.yaml'
+
+        try:
+            # Convert config to dictionary
+            config_dict = self.config.to_dict()
+
+            # Add metadata about the run
+            config_dict['_metadata'] = {
+                'experiment_name': self.experiment_name,
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'output_directory': str(self.output_dir)
+            }
+
+            # Save to YAML file with nice formatting
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(
+                    config_dict,
+                    f,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    allow_unicode=True,
+                    indent=2
+                )
+
+            print(f'✓ Configuration saved to: {config_path}')
+
+        except Exception as e:
+            print(f'⚠ Failed to save configuration file: {e}')
+            print('  Continuing without config file...')
 
     def log_scalar(
         self,
@@ -274,17 +319,13 @@ class ExperimentTracker:
         Returns:
             Path to saved patch file
         """
-        # Create output directory
-        output_dir = Path('pics')
-        output_dir.mkdir(exist_ok=True)
-
         # Generate filename
         if is_best:
             filename = f'best_{epoch}_{loss:.6f}.png'
         else:
             filename = f'{epoch}_{loss:.6f}.png'
 
-        filepath = output_dir / filename
+        filepath = self.output_dir / filename
 
         # Save patch to file
         from torchvision.transforms import ToPILImage
@@ -331,17 +372,13 @@ class ExperimentTracker:
         Returns:
             Path to saved checkpoint file
         """
-        # Create output directory
-        output_dir = Path('checkpoints')
-        output_dir.mkdir(exist_ok=True)
-
         # Generate filename
         if is_best:
             filename = f'best_checkpoint_epoch_{epoch}.pth'
         else:
             filename = f'checkpoint_epoch_{epoch}.pth'
 
-        filepath = output_dir / filename
+        filepath = self.output_dir / filename
 
         # Save checkpoint
         torch.save(checkpoint_dict, filepath)
