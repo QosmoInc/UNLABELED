@@ -11,8 +11,10 @@ For backward compatibility, trainers can be imported at the package level:
 
 from .base_trainer import BasePatchTrainer
 from .inria_trainer import InriaPatchTrainer
+from .unity_trainer import UnityPatchTrainer
 
 __all__ = [
     'BasePatchTrainer',
     'InriaPatchTrainer',
+    'UnityPatchTrainer',
 ]
