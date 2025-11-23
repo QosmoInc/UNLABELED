@@ -8,10 +8,13 @@ COCO class IDs:
 - 16: dog
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from .inria_trainer import InriaPatchTrainer
 from load_data import MaxProbExtractor
+
+if TYPE_CHECKING:
+    from config_models import TrainingConfig
 
 
 class CatPatchTrainer(InriaPatchTrainer):
@@ -21,14 +24,14 @@ class CatPatchTrainer(InriaPatchTrainer):
     confidence in object detection models.
     """
 
-    def __init__(self, mode: str, device: Optional[str] = None) -> None:
+    def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize Cat trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
+            config: TrainingConfig instance with all configuration parameters
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
-        super().__init__(mode, device)
+        super().__init__(config, device)
 
         # Override prob_extractor to target cat class (ID: 15)
         # COCO dataset has 80 classes total
@@ -44,14 +47,14 @@ class DogPatchTrainer(InriaPatchTrainer):
     confidence in object detection models.
     """
 
-    def __init__(self, mode: str, device: Optional[str] = None) -> None:
+    def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize Dog trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
+            config: TrainingConfig instance with all configuration parameters
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
-        super().__init__(mode, device)
+        super().__init__(config, device)
 
         # Override prob_extractor to target dog class (ID: 16)
         # COCO dataset has 80 classes total

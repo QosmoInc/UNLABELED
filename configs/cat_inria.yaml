@@ -3,7 +3,6 @@
 
 trainer:
   type: CatPatchTrainer
-  mode: paper_obj  # Configuration name from patch_config.py
 
 dataset:
   type: inria
@@ -16,13 +15,14 @@ model:
   weightfile: weights/yolov2.weights
 
 patch:
-  size: 600
+  size: 300
+  name: cat_patch
   initial_type: gray
   style_image: imgs/pattern検証0721-02.png
   content_image: imgs/pattern検証0721-02.png
 
 training:
-  batch_size: 4
+  batch_size: 8
   epochs: 300
   learning_rate: 0.03
   num_workers: 4
@@ -32,7 +32,7 @@ losses:
   adain_weight: 0.0
   content_weight: 5.0
   tv_weight: 0.5
-  tv_max: 0.1
+  tv_max: 0.165
 
 target:
   class_id: 15  # cat class in COCO dataset

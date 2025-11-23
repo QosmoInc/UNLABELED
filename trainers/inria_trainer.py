@@ -5,7 +5,7 @@ multiple loss functions including detection loss, style loss, content loss,
 and total variation loss.
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 import torch.optim as optim
@@ -23,6 +23,9 @@ from load_data import (
     TotalVariation
 )
 
+if TYPE_CHECKING:
+    from config_models import TrainingConfig
+
 
 class InriaPatchTrainer(BasePatchTrainer):
     """Trainer for adversarial patches using INRIA Person Dataset.
@@ -34,18 +37,21 @@ class InriaPatchTrainer(BasePatchTrainer):
     - TensorBoard logging and checkpoint saving
     """
 
-    def __init__(self, mode: str, device: Optional[str] = None) -> None:
+    def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize INRIA trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
+            config: TrainingConfig instance with all configuration parameters
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
-        super().__init__(mode, device)
+        super().__init__(config, device)
 
         # Initialize INRIA-specific loss functions
-        # Person class ID is 0 in COCO dataset (80 classes total)
-        self.prob_extractor: MaxProbExtractor = MaxProbExtractor(0, 80, self.config).to(self.device)
+        # Get target class ID from config, default to 0 (person class in COCO)
+        target_class_id = self.config.target.class_id if self.config.target else 0
+        num_classes = 80  # COCO dataset has 80 classes
+
+        self.prob_extractor: MaxProbExtractor = MaxProbExtractor(target_class_id, num_classes, self.config).to(self.device)
         self.adaIN_style_loss: AdaINStyleLoss = AdaINStyleLoss().to(self.device)
         self.content_loss: ContentLoss = ContentLoss().to(self.device)
         self.total_variation: TotalVariation = TotalVariation().to(self.device)
@@ -60,20 +66,29 @@ class InriaPatchTrainer(BasePatchTrainer):
         - TensorBoard logging
         - Best patch checkpointing
         """
-        # Training hyperparameters
-        img_size = self.config.patch_size
-        batch_size = self.config.batch_size
-        n_epochs = 10000
-        max_lab = 14  # Maximum number of persons per image
+        # Training hyperparameters from config
+        img_size = self.config.patch.size
+        batch_size = self.config.training.batch_size
+        n_epochs = self.config.training.epochs
+        max_lab = self.config.dataset.max_labels
 
-        # Generate initial patch
-        adv_patch_cpu = self.generate_patch("gray")
-        # Alternative: Load patch from image
-        # adv_patch_cpu = self.read_image('imgs/01.png')
+        # Generate initial patch based on config
+        if self.config.patch.initial_type == "image" and self.config.patch.initial_image:
+            adv_patch_cpu = self.read_image(self.config.patch.initial_image)
+        else:
+            # Default to gray or use the configured initial_type
+            adv_patch_cpu = self.generate_patch(self.config.patch.initial_type)
 
-        # Load style and content reference images
-        orig_img = self.read_image('imgs/2025_11_22/01-1.jpg').to(self.device)
-        orig_img_style = self.read_image('imgs/2025_11_22/01-1.jpg').to(self.device)
+        # Load style and content reference images from config
+        # Default to None if not specified
+        orig_img = None
+        orig_img_style = None
+
+        if self.config.patch.content_image:
+            orig_img = self.read_image(self.config.patch.content_image).to(self.device)
+
+        if self.config.patch.style_image:
+            orig_img_style = self.read_image(self.config.patch.style_image).to(self.device)
 
         # Enable gradient computation for patch
         adv_patch_cpu.requires_grad_(True)
@@ -83,8 +98,8 @@ class InriaPatchTrainer(BasePatchTrainer):
 
         # Setup dataset and dataloader
         dataset = InriaDataset(
-            self.config.img_dir,
-            self.config.lab_dir,
+            self.config.dataset.img_dir,
+            self.config.dataset.lab_dir,
             max_lab,
             img_size,
             shuffle=True
@@ -93,19 +108,21 @@ class InriaPatchTrainer(BasePatchTrainer):
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4
+            num_workers=self.config.training.num_workers
         )
 
         self.epoch_length = len(train_loader)
         print(f'One epoch is {len(train_loader)} batches')
 
-        # Setup optimizer and scheduler
+        # Setup optimizer
         optimizer = optim.Adam(
             [adv_patch_cpu],
-            lr=self.config.start_learning_rate,
+            lr=self.config.training.learning_rate,
             amsgrad=True
         )
-        scheduler = self.config.scheduler_factory(optimizer)
+        # Note: scheduler_factory is not in the new TrainingConfig
+        # Using ReduceLROnPlateau as a sensible default
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=50)
 
         # Training loop
         best_det_loss = 1.0
@@ -153,26 +170,32 @@ class InriaPatchTrainer(BasePatchTrainer):
 
                     # Calculate losses
                     # Detection loss: minimize person detection confidence
-                    det_loss = torch.mean(max_prob)
+                    det_loss = torch.mean(max_prob) * self.config.losses.detection_weight
 
-                    # Style loss: match style of reference image (weight: 0.0 = disabled)
-                    adaIN_loss = self.adaIN_style_loss(
-                        adv_patch.unsqueeze(0),
-                        orig_img_style.unsqueeze(0).to(self.device)
-                    ) * 0.0
+                    # Style loss: match style of reference image
+                    if orig_img_style is not None and self.config.losses.adain_weight > 0:
+                        adaIN_loss = self.adaIN_style_loss(
+                            adv_patch.unsqueeze(0),
+                            orig_img_style.unsqueeze(0).to(self.device)
+                        ) * self.config.losses.adain_weight
+                    else:
+                        adaIN_loss = torch.tensor(0.0).to(self.device)
 
-                    # Content loss: preserve content structure (weight: 5.0)
-                    c_loss = self.content_loss(adv_patch, orig_img) * 5.0
+                    # Content loss: preserve content structure
+                    if orig_img is not None and self.config.losses.content_weight > 0:
+                        c_loss = self.content_loss(adv_patch, orig_img) * self.config.losses.content_weight
+                    else:
+                        c_loss = torch.tensor(0.0).to(self.device)
 
-                    # Total variation loss: encourage smoothness (weight: 0.5, max: 0.1)
-                    tv_loss = self.total_variation(adv_patch) * 0.5
+                    # Total variation loss: encourage smoothness
+                    tv_loss = self.total_variation(adv_patch) * self.config.losses.tv_weight
 
                     # Combined loss
                     loss = (
                         det_loss +
                         adaIN_loss +
                         c_loss +
-                        torch.max(tv_loss, torch.tensor(0.1).to(self.device))
+                        torch.max(tv_loss, torch.tensor(self.config.losses.tv_max).to(self.device))
                     )
 
                     # Accumulate epoch metrics

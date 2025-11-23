@@ -46,16 +46,36 @@ cp -r yolo-labels inria/Train/pos/
 
 # Generating a patch
 
-## Method 1: Unified Training Script (Recommended)
+## Training with YAML Configuration (Recommended)
 
-The project now includes a unified training script that supports multiple training modes through YAML configuration files.
+The project uses a type-safe YAML-based configuration system with Pydantic validation. All training is done through the unified training script.
 
-### List available trainers
+### Quick Start
+
+1. **Validate configuration** (checks files exist and parameters are valid):
 ```bash
-uv run python train_patch_unified.py --list-trainers
+uv run python train_patch_unified.py --config configs/person_inria.yaml --validate-only
 ```
 
-### Train with a configuration file
+2. **Start training**:
+```bash
+uv run python train_patch_unified.py --config configs/person_inria.yaml
+```
+
+### Available Configuration Files
+
+All configuration files are located in the `configs/` directory with Pydantic validation:
+
+| Config File | Trainer | Dataset | Target | Description |
+|------------|---------|---------|--------|-------------|
+| `person_inria.yaml` | InriaPatchTrainer | INRIA | Person (class 0) | Paper reproduction |
+| `cat_inria.yaml` | CatPatchTrainer | INRIA | Cat (class 15) | Cat detection |
+| `dog_unity.yaml` | DogPatchTrainer | Unity | Dog (class 16) | Dog detection |
+| `person_bear_multiclass.yaml` | MultiClassPatchTrainer | INRIA | Person↓ Bear↑ | Multi-class |
+| `unity_person.yaml` | UnityPatchTrainer | Unity | Person (class 0) | Unity synthetic |
+
+### Training Examples
+
 ```bash
 # INRIA person detection (reproduces paper results)
 uv run python train_patch_unified.py --config configs/person_inria.yaml
@@ -66,48 +86,89 @@ uv run python train_patch_unified.py --config configs/cat_inria.yaml
 # Dog detection (Unity dataset)
 uv run python train_patch_unified.py --config configs/dog_unity.yaml
 
-# Multi-class: suppress person detection while enhancing bear detection
+# Multi-class: suppress person while enhancing bear
 uv run python train_patch_unified.py --config configs/person_bear_multiclass.yaml
 ```
 
-### Override configuration parameters
+### Override Configuration Parameters
+
+You can override any parameter via command-line arguments:
+
 ```bash
 uv run python train_patch_unified.py --config configs/person_inria.yaml \
-    --batch-size 8 \
+    --batch-size 16 \
     --epochs 500 \
-    --learning-rate 0.01
+    --learning-rate 0.01 \
+    --patch-size 400
 ```
 
-### Available Trainers
+### List Available Trainers
+
+```bash
+uv run python train_patch_unified.py --list-trainers
+```
+
+Output:
 - **InriaPatchTrainer**: Person detection using INRIA dataset
 - **CatPatchTrainer**: Cat detection (COCO class 15)
 - **DogPatchTrainer**: Dog detection (COCO class 16)
-- **MultiClassPatchTrainer**: Multi-class adversarial patches (suppress one class, enhance another)
-- **UnityPatchTrainer**: Unity-generated synthetic data (requires `python-osc`)
+- **MultiClassPatchTrainer**: Suppress one class, enhance another
+- **UnityPatchTrainer**: Unity synthetic data (requires `python-osc`)
 
-### Configuration Files
-Configuration files are located in the `configs/` directory:
-- `person_inria.yaml` - INRIA person detection (paper reproduction)
-- `cat_inria.yaml` - Cat detection
-- `dog_unity.yaml` - Dog detection with Unity dataset
-- `person_bear_multiclass.yaml` - Multi-class training
-- `unity_person.yaml` - Unity person detection
+### Creating Custom Configurations
 
-You can create your own configuration files based on these examples.
+Create a new YAML file in `configs/` directory. See existing files for examples:
 
-## Method 2: Direct Training Scripts (Legacy)
+```yaml
+# configs/my_custom.yaml
+trainer:
+  type: InriaPatchTrainer
 
-`patch_config.py` contains configuration of different experiments. You can design your own experiment by inheriting from the base `BaseConfig` class or an existing experiment. `ReproducePaperObj` reproduces the patch that minimizes object score from the paper (With a lower batch size to fit on a desktop GPU).
+dataset:
+  type: inria
+  img_dir: inria/Train/pos
+  lab_dir: inria/Train/pos/yolo-labels
+  max_labels: 14
 
-You can generate this patch by running:
-```bash
-uv run python train_patch_inria.py paper_obj
+model:
+  cfgfile: cfg/yolov2.cfg
+  weightfile: weights/yolov2.weights
+
+patch:
+  size: 300
+  name: my_custom_patch
+  initial_type: gray  # Options: gray, random, image
+
+training:
+  batch_size: 8
+  epochs: 300
+  learning_rate: 0.03
+  num_workers: 4
+
+losses:
+  detection_weight: 1.0
+  tv_weight: 0.5
+  tv_max: 0.165
+
+target:
+  class_id: 0  # COCO class ID
+  objective: minimize  # or maximize
 ```
 
-Note: `train_patch_inria.py` is the main training script for person detection on the INRIA dataset.
+Then validate and run:
+```bash
+uv run python train_patch_unified.py --config configs/my_custom.yaml --validate-only
+uv run python train_patch_unified.py --config configs/my_custom.yaml
+```
 
-### Other Training Scripts
-- `train_patch.py` - Unity synthetic data
-- `archive/training_variants/train_patch_dog.py` - Dog detection
-- `archive/training_variants/train_patch_inria_cat.py` - Cat detection
-- `archive/training_variants/train_patch_inria_class_up.py` - Multi-class training
+## Legacy Training Scripts (Deprecated)
+
+**Note**: The old `patch_config.py` system has been replaced with YAML configuration. Legacy scripts are kept in `archive/` for reference but are no longer maintained.
+
+If you need to use legacy scripts:
+```bash
+# Legacy training (not recommended)
+uv run python archive/training_variants/train_patch_dog.py
+```
+
+For new projects, use the YAML configuration system above

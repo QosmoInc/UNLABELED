@@ -48,9 +48,18 @@ class MaxProbExtractor(nn.Module):
         normal_confs = torch.nn.Softmax(dim=1)(output)
         # we only care for probabilities of the class of interest (person)
         confs_for_class = normal_confs[:, self.cls_id, :]
-        confs_if_object = output_objectness #confs_for_class * output_objectness
-        confs_if_object = confs_for_class * output_objectness
-        confs_if_object = self.config.loss_target(output_objectness, confs_for_class)
+
+        # Calculate confidence if object is detected
+        # Default: multiply objectness score with class confidence (obj * cls)
+        # This can be configured via loss_target in config (if using legacy config)
+        if hasattr(self.config, 'loss_target'):
+            # Legacy config support
+            confs_if_object = self.config.loss_target(output_objectness, confs_for_class)
+        else:
+            # New config: use objectness score only (for paper_obj reproduction)
+            # For minimizing detection, we want to minimize objectness score
+            confs_if_object = output_objectness
+
         # find the max probability for person
         max_conf, max_conf_idx = torch.max(confs_if_object, dim=1)
 

@@ -8,7 +8,7 @@ import os
 import time
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import Any, Optional, TYPE_CHECKING
 
 import torch
 import torchvision.transforms as transforms
@@ -24,7 +24,9 @@ from load_data import (
     ContentLoss,
     TotalVariation
 )
-import patch_config
+
+if TYPE_CHECKING:
+    from config_models import TrainingConfig
 
 
 class BasePatchTrainer(ABC):
@@ -39,32 +41,24 @@ class BasePatchTrainer(ABC):
     Subclasses must implement the train() method with dataset-specific logic.
     """
 
-    def __init__(self, mode: str, device: Optional[str] = None) -> None:
+    def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize the patch trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
-            device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
+            config: TrainingConfig instance with all configuration parameters
+            device: Device to use ('cuda:0', 'cpu', etc.). Overrides config.trainer.device if specified.
 
         Raises:
-            ValueError: If mode is not found in patch_configs
             FileNotFoundError: If required config files don't exist
         """
-        # Validate mode exists
-        if mode not in patch_config.patch_configs:
-            available_modes = ', '.join(patch_config.patch_configs.keys())
-            raise ValueError(
-                f"Unknown mode '{mode}'. Available modes: {available_modes}"
-            )
-
-        # Load configuration
-        self.config: Any = patch_config.patch_configs[mode]()
-        self.mode: str = mode
-
-        # Validate configuration
-        self._validate_config()
+        # Store configuration
+        self.config: 'TrainingConfig' = config
 
         # Device setup with fallback
+        # Priority: explicit device arg > config.trainer.device > auto-detect
+        if device is None:
+            device = config.trainer.device
+
         if device is None:
             if torch.cuda.is_available():
                 self.device: str = 'cuda:0'
@@ -80,12 +74,11 @@ class BasePatchTrainer(ABC):
                 self.device = 'cpu'
 
         print(f'Device: {self.device}')
-        print(self.config)
         print('=' * 40)
 
         # Initialize YOLO detection model
-        self.darknet_model: Darknet = Darknet(self.config.cfgfile)
-        self.darknet_model.load_weights(self.config.weightfile)
+        self.darknet_model: Darknet = Darknet(self.config.model.cfgfile)
+        self.darknet_model.load_weights(self.config.model.weightfile)
         # Set to eval mode to disable dropout/batch norm training behavior
         self.darknet_model = self.darknet_model.eval().to(self.device)
 
@@ -94,54 +87,10 @@ class BasePatchTrainer(ABC):
         self.patch_transformer: PatchTransformer = PatchTransformer().to(self.device)
 
         # Initialize TensorBoard writer
-        self.writer: SummaryWriter = self.init_tensorboard(mode)
+        self.writer: SummaryWriter = self.init_tensorboard(self.config.patch.name)
 
         # Track epoch length for logging
         self.epoch_length: int = 0
-
-    def _validate_config(self) -> None:
-        """Validate configuration parameters.
-
-        Raises:
-            FileNotFoundError: If required files don't exist
-            ValueError: If parameters are invalid
-        """
-        # Check required files exist
-        if not os.path.exists(self.config.cfgfile):
-            raise FileNotFoundError(
-                f"YOLO config file not found: {self.config.cfgfile}"
-            )
-
-        if not os.path.exists(self.config.weightfile):
-            raise FileNotFoundError(
-                f"YOLO weights file not found: {self.config.weightfile}"
-            )
-
-        if not os.path.exists(self.config.img_dir):
-            raise FileNotFoundError(
-                f"Image directory not found: {self.config.img_dir}"
-            )
-
-        if not os.path.exists(self.config.lab_dir):
-            raise FileNotFoundError(
-                f"Label directory not found: {self.config.lab_dir}"
-            )
-
-        # Validate parameter values
-        if self.config.patch_size <= 0:
-            raise ValueError(
-                f"patch_size must be positive, got {self.config.patch_size}"
-            )
-
-        if self.config.batch_size <= 0:
-            raise ValueError(
-                f"batch_size must be positive, got {self.config.batch_size}"
-            )
-
-        if self.config.start_learning_rate <= 0:
-            raise ValueError(
-                f"start_learning_rate must be positive, got {self.config.start_learning_rate}"
-            )
 
     def init_tensorboard(self, name: Optional[str] = None) -> SummaryWriter:
         """Initialize TensorBoard logging.
@@ -178,12 +127,12 @@ class BasePatchTrainer(ABC):
         """
         if patch_type == 'gray':
             adv_patch_cpu = torch.full(
-                (3, self.config.patch_size, self.config.patch_size),
+                (3, self.config.patch.size, self.config.patch.size),
                 0.5
             )
         elif patch_type == 'random':
             adv_patch_cpu = torch.rand(
-                (3, self.config.patch_size, self.config.patch_size)
+                (3, self.config.patch.size, self.config.patch.size)
             )
         else:
             raise ValueError(f"Unknown patch type: {patch_type}. Use 'gray' or 'random'.")
@@ -212,7 +161,7 @@ class BasePatchTrainer(ABC):
             raise ValueError(f"Failed to open image {path}: {str(e)}")
 
         # Resize to patch size
-        tf = transforms.Resize((self.config.patch_size, self.config.patch_size))
+        tf = transforms.Resize((self.config.patch.size, self.config.patch.size))
         patch_img = tf(patch_img)
 
         # Convert to tensor

@@ -8,7 +8,7 @@ COCO class IDs:
 - 21: bear
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 import torch.optim as optim
@@ -28,6 +28,9 @@ from load_data import (
     PatchApplier
 )
 
+if TYPE_CHECKING:
+    from config_models import TrainingConfig
+
 
 class MultiClassPatchTrainer(BasePatchTrainer):
     """Patch trainer for multi-class adversarial patches.
@@ -40,7 +43,7 @@ class MultiClassPatchTrainer(BasePatchTrainer):
 
     def __init__(
         self,
-        mode: str,
+        config: 'TrainingConfig',
         suppress_class_id: int = 0,  # person
         enhance_class_id: int = 21,  # bear
         device: Optional[str] = None
@@ -48,12 +51,12 @@ class MultiClassPatchTrainer(BasePatchTrainer):
         """Initialize MultiClass trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
+            config: TrainingConfig instance with all configuration parameters
             suppress_class_id: Class ID to suppress (default: 0 for person)
             enhance_class_id: Class ID to enhance (default: 21 for bear)
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
-        super().__init__(mode, device)
+        super().__init__(config, device)
 
         # Store class IDs
         self.suppress_class_id = suppress_class_id
@@ -75,26 +78,43 @@ class MultiClassPatchTrainer(BasePatchTrainer):
 
     def train(
         self,
-        style_image_path: str = 'imgs/210825_ダギング_6.jpg',
-        content_image_path: str = 'imgs/bear2.jpg'
+        style_image_path: Optional[str] = None,
+        content_image_path: Optional[str] = None
     ) -> None:
         """Train adversarial patch with multi-class objectives.
 
         Args:
-            style_image_path: Path to style reference image
-            content_image_path: Path to content reference image
+            style_image_path: Path to style reference image (overrides config)
+            content_image_path: Path to content reference image (overrides config)
         """
-        img_size = self.config.patch_size
-        batch_size = self.config.batch_size
-        n_epochs = 300
-        max_lab = 14
+        img_size = self.config.patch.size
+        batch_size = self.config.training.batch_size
+        n_epochs = self.config.training.epochs
+        max_lab = self.config.dataset.max_labels
+
+        # Use config values if not overridden
+        if style_image_path is None:
+            style_image_path = self.config.patch.style_image or 'imgs/210825_ダギング_6.jpg'
+        if content_image_path is None:
+            content_image_path = self.config.patch.content_image or 'imgs/bear2.jpg'
 
         # Load style and content images
         orig_img_style = self.read_image(style_image_path).to(self.device)
         orig_img = self.read_image(content_image_path).to(self.device)
 
         # Initialize patch
-        adv_patch_cpu = self.generate_patch("gray")
+        if self.config.patch.initial_type == 'gray':
+            adv_patch_cpu = self.generate_patch("gray")
+        elif self.config.patch.initial_type == 'random':
+            adv_patch_cpu = self.generate_patch("random")
+        elif self.config.patch.initial_type == 'image':
+            if self.config.patch.initial_image:
+                adv_patch_cpu = self.read_image(self.config.patch.initial_image)
+            else:
+                raise ValueError("initial_image must be specified when initial_type='image'")
+        else:
+            adv_patch_cpu = self.generate_patch("gray")
+
         adv_patch_cpu.requires_grad_(True)
 
         # Save initial patch
@@ -102,8 +122,8 @@ class MultiClassPatchTrainer(BasePatchTrainer):
 
         # Initialize dataset
         dataset = InriaDataset(
-            self.config.img_dir,
-            self.config.lab_dir,
+            self.config.dataset.img_dir,
+            self.config.dataset.lab_dir,
             max_lab,
             img_size,
             shuffle=True
@@ -112,7 +132,7 @@ class MultiClassPatchTrainer(BasePatchTrainer):
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4
+            num_workers=self.config.training.num_workers
         )
 
         self.epoch_length = len(train_loader)
@@ -121,10 +141,11 @@ class MultiClassPatchTrainer(BasePatchTrainer):
         # Initialize optimizer and scheduler
         optimizer = optim.Adam(
             [adv_patch_cpu],
-            lr=self.config.start_learning_rate,
+            lr=self.config.training.learning_rate,
             amsgrad=True
         )
-        scheduler = self.config.scheduler_factory(optimizer)
+        # Use ReduceLROnPlateau scheduler (was previously from config.scheduler_factory)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=50)
 
         # Initialize patch transformer and applier
         patch_transformer = PatchTransformer().to(self.device)
@@ -179,16 +200,16 @@ class MultiClassPatchTrainer(BasePatchTrainer):
                     adain_loss = self.adaIN_style_loss(
                         adv_patch.unsqueeze(0),
                         orig_img_style.unsqueeze(0)
-                    ) * 0.0
+                    ) * self.config.losses.adain_weight
 
                     content_loss = self.content_loss(
                         adv_patch.unsqueeze(0),
                         orig_img.unsqueeze(0)
-                    ) * 5.0
+                    ) * self.config.losses.content_weight
 
                     # Calculate total variation loss
-                    tv_loss = self.total_variation(adv_patch) * 0.5
-                    tv_loss = torch.clamp(tv_loss, max=0.1)
+                    tv_loss = self.total_variation(adv_patch) * self.config.losses.tv_weight
+                    tv_loss = torch.clamp(tv_loss, max=self.config.losses.tv_max)
 
                     # Combine all losses
                     loss = suppress_loss + enhance_loss + adain_loss + content_loss + tv_loss

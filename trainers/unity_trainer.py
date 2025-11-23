@@ -6,7 +6,7 @@ detection loss and AdaIN style loss.
 
 import os
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 import torch.optim as optim
@@ -24,6 +24,9 @@ from load_data import (
 )
 from unity_dataset import UnityDataset
 
+if TYPE_CHECKING:
+    from config_models import TrainingConfig
+
 
 class UnityPatchTrainer(BasePatchTrainer):
     """Patch trainer for Unity-generated synthetic dataset.
@@ -35,21 +38,21 @@ class UnityPatchTrainer(BasePatchTrainer):
     - Custom patch size (600x600 by default)
     """
 
-    def __init__(self, mode: str, device: Optional[str] = None) -> None:
+    def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize Unity trainer.
 
         Args:
-            mode: Configuration name from patch_config.patch_configs
+            config: TrainingConfig instance with all configuration parameters
             device: Device to use ('cuda:0', 'cpu', etc.). Auto-detected if None.
         """
-        super().__init__(mode, device)
-
-        # Override patch size for Unity dataset
-        self.config.patch_size = 600
+        super().__init__(config, device)
 
         # Initialize Unity-specific loss functions
-        # Person class ID is 0 in COCO dataset (80 classes total)
-        self.prob_extractor: MaxProbExtractor = MaxProbExtractor(0, 80, self.config).to(self.device)
+        # Get target class ID from config, default to person (0)
+        target_class_id = self.config.target.class_id if self.config.target else 0
+        self.prob_extractor: MaxProbExtractor = MaxProbExtractor(
+            target_class_id, 80, self.config
+        ).to(self.device)
         self.adaIN_style_loss: AdaINStyleLoss = AdaINStyleLoss().to(self.device)
 
     def train(self) -> None:
@@ -64,32 +67,56 @@ class UnityPatchTrainer(BasePatchTrainer):
         - Best patch checkpointing
         """
         img_size = self.darknet_model.height
-        batch_size = self.config.batch_size
-        n_epochs = 10000
+        batch_size = self.config.training.batch_size
+        n_epochs = self.config.training.epochs
 
-        # Generate starting point from existing image
-        orig_img = self.read_image('imgs/AF_patch_mayuu_01.jpg').to(self.device)
-        adv_patch_cpu = orig_img.cpu()
+        # Initialize patch based on config
+        if self.config.patch.initial_type == 'image' and self.config.patch.initial_image:
+            orig_img = self.read_image(self.config.patch.initial_image).to(self.device)
+            adv_patch_cpu = orig_img.cpu()
+        elif self.config.patch.initial_type == 'gray':
+            adv_patch_cpu = self.generate_patch('gray')
+        elif self.config.patch.initial_type == 'random':
+            adv_patch_cpu = self.generate_patch('random')
+        else:
+            # Default fallback to gray
+            adv_patch_cpu = self.generate_patch('gray')
+
+        # Load style image if specified
+        if self.config.patch.style_image:
+            orig_img = self.read_image(self.config.patch.style_image).to(self.device)
+        else:
+            orig_img = adv_patch_cpu.clone().to(self.device)
+
         adv_patch_cpu.requires_grad_(True)
 
         # Save initial patch
         self.save_patch(adv_patch_cpu, 0)
 
         # Initialize Unity dataset
-        dataset = UnityDataset(data_dir='train_data_0', img_size=img_size, num_images=614)
+        dataset = UnityDataset(
+            data_dir=self.config.dataset.img_dir,
+            img_size=img_size,
+            num_images=614
+        )
         train_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0
+            num_workers=self.config.training.num_workers
         )
 
         self.epoch_length = len(train_loader)
         print(f'One epoch is {len(train_loader)}')
 
         # Initialize optimizer and scheduler
-        optimizer = optim.Adam([adv_patch_cpu], lr=self.config.start_learning_rate, amsgrad=True)
-        scheduler = self.config.scheduler_factory(optimizer)
+        optimizer = optim.Adam(
+            [adv_patch_cpu],
+            lr=self.config.training.learning_rate,
+            amsgrad=True
+        )
+        # Use ReduceLROnPlateau scheduler (was previously from config.scheduler_factory)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=50)
 
         et0 = time.time()
         best_det_loss = 1.0

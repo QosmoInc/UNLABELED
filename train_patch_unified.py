@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Unified training script for adversarial patch generation.
+"""Unified training script for adversarial patch generation with YAML configuration.
 
 This script provides a unified interface for training adversarial patches across
-different datasets and target classes using YAML configuration files.
+different datasets and target classes using type-safe YAML configuration files.
 
 Usage:
     # Train with a configuration file
     python train_patch_unified.py --config configs/person_inria.yaml
 
     # Override configuration with command-line arguments
-    python train_patch_unified.py --config configs/person_inria.yaml --batch-size 8 --epochs 500
+    python train_patch_unified.py --config configs/person_inria.yaml --batch-size 16
 
     # List available trainer types
     python train_patch_unified.py --list-trainers
+
+    # Validate configuration without training
+    python train_patch_unified.py --config configs/person_inria.yaml --validate-only
 
 Examples:
     # INRIA person detection
@@ -31,11 +34,12 @@ Examples:
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import yaml
 
 import trainers
+from config_models import TrainingConfig
 
 
 # Trainer type mapping
@@ -51,53 +55,48 @@ if hasattr(trainers, 'UnityPatchTrainer') and trainers.UnityPatchTrainer is not 
     TRAINER_REGISTRY['UnityPatchTrainer'] = trainers.UnityPatchTrainer
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
-    """Load YAML configuration file.
+def apply_overrides(config: TrainingConfig, args: argparse.Namespace) -> None:
+    """Apply command-line argument overrides to configuration.
 
     Args:
-        config_path: Path to YAML configuration file
+        config: Configuration instance to modify
+        args: Parsed command-line arguments
+    """
+    # Override training parameters
+    if args.batch_size is not None:
+        config.training.batch_size = args.batch_size
+
+    if args.epochs is not None:
+        config.training.epochs = args.epochs
+
+    if args.learning_rate is not None:
+        config.training.learning_rate = args.learning_rate
+
+    # Override patch parameters
+    if args.patch_size is not None:
+        config.patch.size = args.patch_size
+
+    # Override device
+    if args.device is not None:
+        config.trainer.device = args.device
+
+
+def create_trainer(config: TrainingConfig) -> trainers.BasePatchTrainer:
+    """Create trainer instance from configuration.
+
+    Args:
+        config: Training configuration
 
     Returns:
-        Dictionary containing configuration
+        Trainer instance
 
     Raises:
-        FileNotFoundError: If configuration file doesn't exist
-        yaml.YAMLError: If YAML parsing fails
+        ValueError: If trainer type is unknown
     """
-    config_file = Path(config_path)
+    trainer_type = config.trainer.type
+    device = config.trainer.device
 
-    if not config_file.exists():
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-    with open(config_file, 'r', encoding='utf-8') as f:
-        try:
-            config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            raise yaml.YAMLError(f"Failed to parse YAML configuration: {e}")
-
-    return config
-
-
-def validate_config(config: Dict[str, Any]) -> None:
-    """Validate configuration structure.
-
-    Args:
-        config: Configuration dictionary
-
-    Raises:
-        ValueError: If required fields are missing or invalid
-    """
-    # Check required top-level keys
-    required_keys = ['trainer']
-    for key in required_keys:
-        if key not in config:
-            raise ValueError(f"Missing required configuration key: {key}")
-
-    # Check trainer configuration
-    if 'type' not in config['trainer']:
-        raise ValueError("Missing 'type' in trainer configuration")
-
-    trainer_type = config['trainer']['type']
+    # Get trainer class
     if trainer_type not in TRAINER_REGISTRY:
         available = ', '.join(TRAINER_REGISTRY.keys())
         raise ValueError(
@@ -105,82 +104,22 @@ def validate_config(config: Dict[str, Any]) -> None:
             f"Available types: {available}"
         )
 
-    # Check mode is specified
-    if 'mode' not in config['trainer']:
-        raise ValueError("Missing 'mode' in trainer configuration")
-
-
-def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> None:
-    """Apply command-line argument overrides to configuration.
-
-    Args:
-        config: Configuration dictionary to modify
-        args: Parsed command-line arguments
-    """
-    # Override training parameters
-    if args.batch_size is not None:
-        if 'training' not in config:
-            config['training'] = {}
-        config['training']['batch_size'] = args.batch_size
-
-    if args.epochs is not None:
-        if 'training' not in config:
-            config['training'] = {}
-        config['training']['epochs'] = args.epochs
-
-    if args.learning_rate is not None:
-        if 'training' not in config:
-            config['training'] = {}
-        config['training']['learning_rate'] = args.learning_rate
-
-    # Override patch parameters
-    if args.patch_size is not None:
-        if 'patch' not in config:
-            config['patch'] = {}
-        config['patch']['size'] = args.patch_size
-
-    # Override device
-    if args.device is not None:
-        if 'trainer' not in config:
-            config['trainer'] = {}
-        config['trainer']['device'] = args.device
-
-
-def create_trainer(config: Dict[str, Any]) -> trainers.BasePatchTrainer:
-    """Create trainer instance from configuration.
-
-    Args:
-        config: Configuration dictionary
-
-    Returns:
-        Trainer instance
-
-    Raises:
-        ValueError: If trainer type is unknown or configuration is invalid
-    """
-    trainer_config = config['trainer']
-    trainer_type = trainer_config['type']
-    mode = trainer_config['mode']
-    device = trainer_config.get('device', None)
-
-    # Get trainer class
     trainer_class = TRAINER_REGISTRY[trainer_type]
 
-    # Create trainer instance
+    # Create trainer with config
     # MultiClassPatchTrainer has additional parameters
     if trainer_type == 'MultiClassPatchTrainer':
-        targets = config.get('targets', {})
-        suppress_class = targets.get('suppress', {}).get('class_id', 0)
-        enhance_class = targets.get('enhance', {}).get('class_id', 21)
+        if config.targets is None:
+            raise ValueError("MultiClassPatchTrainer requires 'targets' configuration")
 
         trainer = trainer_class(
-            mode=mode,
-            suppress_class_id=suppress_class,
-            enhance_class_id=enhance_class,
+            config=config,
+            suppress_class_id=config.targets.suppress.class_id,
+            enhance_class_id=config.targets.enhance.class_id,
             device=device
         )
     else:
-        trainer = trainer_class(mode=mode, device=device)
+        trainer = trainer_class(config=config, device=device)
 
     return trainer
 
@@ -188,7 +127,7 @@ def create_trainer(config: Dict[str, Any]) -> trainers.BasePatchTrainer:
 def list_available_trainers() -> None:
     """Print available trainer types and exit."""
     print("\nAvailable Trainer Types:")
-    print("=" * 60)
+    print("=" * 70)
 
     for name, cls in TRAINER_REGISTRY.items():
         doc = cls.__doc__
@@ -201,7 +140,7 @@ def list_available_trainers() -> None:
         print(f"\n{name}:")
         print(f"  {description}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("\nUse --config <config_file.yaml> to specify a training configuration.")
     print("Example configs are available in the configs/ directory.")
 
@@ -209,7 +148,7 @@ def list_available_trainers() -> None:
 def main() -> None:
     """Main entry point for unified training script."""
     parser = argparse.ArgumentParser(
-        description='Unified adversarial patch training script',
+        description='Unified adversarial patch training script with YAML configuration',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -224,6 +163,12 @@ def main() -> None:
         '--list-trainers',
         action='store_true',
         help='List available trainer types and exit'
+    )
+
+    parser.add_argument(
+        '--validate-only',
+        action='store_true',
+        help='Validate configuration without starting training'
     )
 
     # Override parameters (optional)
@@ -271,46 +216,55 @@ def main() -> None:
         parser.error("--config is required (or use --list-trainers)")
 
     try:
-        # Load configuration
+        # Load configuration using Pydantic
         print(f"Loading configuration from: {args.config}")
-        config = load_config(args.config)
-
-        # Validate configuration
-        validate_config(config)
+        config = TrainingConfig.from_yaml(args.config)
 
         # Apply command-line overrides
-        apply_overrides(config, args)
+        if any([args.batch_size, args.epochs, args.learning_rate,
+                args.patch_size, args.device]):
+            print("\nApplying command-line overrides...")
+            apply_overrides(config, args)
 
         # Print final configuration
-        print("\nFinal Configuration:")
-        print("=" * 60)
-        print(yaml.dump(config, default_flow_style=False, allow_unicode=True))
-        print("=" * 60)
+        print("\n" + "=" * 70)
+        print("Final Configuration:")
+        print("=" * 70)
+        print(yaml.dump(config.to_dict(), default_flow_style=False,
+                       allow_unicode=True, sort_keys=False))
+        print("=" * 70)
+
+        # Validate configuration
+        print("\nValidating configuration...")
+        config.validate()
+        print("✓ Configuration is valid")
+
+        # Exit if validation only
+        if args.validate_only:
+            print("\n--validate-only specified, exiting without training.")
+            sys.exit(0)
 
         # Create trainer
-        print(f"\nCreating trainer: {config['trainer']['type']}")
+        print(f"\nCreating trainer: {config.trainer.type}")
         trainer = create_trainer(config)
 
         # Start training
         print("\nStarting training...\n")
+        print("=" * 70)
 
-        # Special handling for MultiClassPatchTrainer
-        if isinstance(trainer, trainers.MultiClassPatchTrainer):
-            patch_config = config.get('patch', {})
-            style_image = patch_config.get('style_image', 'imgs/210825_ダギング_6.jpg')
-            content_image = patch_config.get('content_image', 'imgs/bear2.jpg')
-            trainer.train(style_image_path=style_image, content_image_path=content_image)
-        else:
-            trainer.train()
+        # Call trainer.train() - trainers should read config internally
+        trainer.train()
 
-        print("\nTraining completed successfully!")
+        print("\n" + "=" * 70)
+        print("Training completed successfully!")
+        print("=" * 70)
 
     except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"\nError: {e}", file=sys.stderr)
         sys.exit(1)
 
-    except (ValueError, yaml.YAMLError) as e:
-        print(f"Configuration error: {e}", file=sys.stderr)
+    except ValueError as e:
+        print(f"\nConfiguration error: {e}", file=sys.stderr)
         sys.exit(1)
 
     except KeyboardInterrupt:
@@ -318,7 +272,7 @@ def main() -> None:
         sys.exit(130)
 
     except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
+        print(f"\nUnexpected error: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         sys.exit(1)

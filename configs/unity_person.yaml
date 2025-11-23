@@ -3,12 +3,12 @@
 
 trainer:
   type: UnityPatchTrainer
-  mode: paper_obj
 
 dataset:
   type: unity
-  data_dir: train_data_0
-  num_images: 614
+  img_dir: train_data_0
+  lab_dir: train_data_0  # Unity stores labels in same dir
+  max_labels: 14
 
 model:
   cfgfile: cfg/yolov2.cfg
@@ -16,7 +16,9 @@ model:
 
 patch:
   size: 600
-  initial_type: imgs/AF_patch_mayuu_01.jpg
+  name: unity_person_patch
+  initial_type: image
+  initial_image: imgs/AF_patch_mayuu_01.jpg
   style_image: imgs/AF_patch_mayuu_01.jpg
   content_image: imgs/AF_patch_mayuu_01.jpg
 
@@ -29,6 +31,9 @@ training:
 losses:
   detection_weight: 1.0
   adain_weight: 0.001
+  content_weight: 0.0
+  tv_weight: 0.0
+  tv_max: 0.165
 
 target:
   class_id: 0  # person class in COCO dataset
