@@ -41,3 +41,12 @@ targets:
   enhance:
     class_id: 21  # bear
     objective: maximize
+
+wandb:
+  enabled: true
+  project: adversarial-patch
+  tags:
+    - multiclass
+    - person-detection
+    - bear-detection
+  notes: Multi-class patch training - suppress person detection while enhancing bear detection

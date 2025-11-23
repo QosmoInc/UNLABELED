@@ -38,3 +38,11 @@ losses:
 target:
   class_id: 16  # dog class in COCO dataset
   objective: minimize
+
+wandb:
+  enabled: true
+  project: adversarial-patch
+  tags:
+    - dog-detection
+    - unity-dataset
+  notes: Training adversarial patch to minimize dog detection using Unity synthetic data

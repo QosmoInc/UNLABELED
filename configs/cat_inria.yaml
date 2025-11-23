@@ -37,3 +37,11 @@ losses:
 target:
   class_id: 15  # cat class in COCO dataset
   objective: minimize
+
+wandb:
+  enabled: true
+  project: adversarial-patch
+  tags:
+    - cat-detection
+    - inria-dataset
+  notes: Training adversarial patch to minimize cat detection confidence

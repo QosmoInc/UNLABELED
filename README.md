@@ -29,7 +29,7 @@ This project uses Python 3.11 and the `uv` package manager.
 uv sync
 ```
 
-This will install PyTorch 2.9.1 (with CUDA 12.9), TensorBoard, and other dependencies as specified in `pyproject.toml`.
+This will install PyTorch 2.9.1 (with CUDA 12.9), Weights & Biases, and other dependencies as specified in `pyproject.toml`.
 
 Make sure you have the YOLOv2 MS COCO weights:
 ```
@@ -45,6 +45,50 @@ cp -r yolo-labels inria/Train/pos/
 ```
 
 # Generating a patch
+
+## Experiment Tracking with Weights & Biases
+
+This project uses **Weights & Biases (WandB)** for experiment tracking, visualization, and artifact management. WandB provides:
+- Real-time metric logging and visualization
+- Automatic hyperparameter tracking
+- Patch artifact versioning
+- Experiment comparison and analysis
+- Team collaboration features
+
+### WandB Setup
+
+1. **Create a free account**: Visit [wandb.ai](https://wandb.ai) and sign up
+2. **Login via CLI**:
+```bash
+wandb login
+```
+
+### Configuration
+
+WandB settings can be configured in your YAML configuration file:
+
+```yaml
+wandb:
+  enabled: true                    # Enable/disable WandB tracking
+  project: adversarial-patch       # WandB project name
+  entity: your-username            # Optional: WandB username/team
+  tags:                            # Tags for organizing runs
+    - person-detection
+    - inria-dataset
+  notes: Training description      # Optional notes
+```
+
+### Disabling WandB
+
+To train without WandB tracking:
+```bash
+# Option 1: Disable in YAML config
+wandb:
+  enabled: false
+
+# Option 2: Run in offline mode
+WANDB_MODE=offline uv run python train_patch_unified.py --config configs/person_inria.yaml
+```
 
 ## Training with YAML Configuration (Recommended)
 
@@ -153,12 +197,33 @@ losses:
 target:
   class_id: 0  # COCO class ID
   objective: minimize  # or maximize
+
+wandb:
+  enabled: true
+  project: adversarial-patch
+  tags:
+    - custom-experiment
+  notes: My custom experiment description
 ```
 
 Then validate and run:
 ```bash
 uv run python train_patch_unified.py --config configs/my_custom.yaml --validate-only
 uv run python train_patch_unified.py --config configs/my_custom.yaml
+```
+
+### Viewing Results
+
+During training, WandB will provide a URL to view your experiment dashboard in real-time. The dashboard shows:
+- **Metrics**: Loss curves, learning rate, epoch progress
+- **Images**: Patch evolution, training images with patches applied
+- **Artifacts**: Saved patch files with versioning
+- **System**: GPU utilization, memory usage
+- **Config**: All hyperparameters and settings
+
+Example output:
+```
+✓ WandB initialized: https://wandb.ai/your-username/adversarial-patch/runs/abc123
 ```
 
 ## Legacy Training Scripts (Deprecated)

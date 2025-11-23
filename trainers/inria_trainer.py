@@ -210,19 +210,24 @@ class InriaPatchTrainer(BasePatchTrainer):
                     # Clamp patch values to valid image range [0, 1]
                     adv_patch_cpu.data.clamp_(0, 1)
 
-                    # TensorBoard logging (every 5 batches)
+                    # Log metrics to WandB (every 5 batches)
                     if i_batch % 5 == 0:
                         iteration = self.epoch_length * epoch + i_batch
 
-                        self.writer.add_scalar('total_loss', loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('loss/det_loss', det_loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('loss/adaIN_loss', adaIN_loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('loss/content_loss', c_loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('misc/epoch', epoch, iteration)
-                        self.writer.add_scalar('misc/learning_rate', optimizer.param_groups[0]["lr"], iteration)
+                        # Log scalar metrics
+                        self.tracker.log_scalars({
+                            'total_loss': loss,
+                            'loss/det_loss': det_loss,
+                            'loss/adaIN_loss': adaIN_loss,
+                            'loss/content_loss': c_loss,
+                            'loss/tv_loss': tv_loss,
+                            'epoch': epoch,
+                            'learning_rate': optimizer.param_groups[0]["lr"]
+                        }, step=iteration)
 
-                        self.writer.add_image('patch', adv_patch_cpu, iteration)
-                        self.writer.add_image('training_images', torchvision.utils.make_grid(p_img_batch), iteration)
+                        # Log images
+                        self.tracker.log_image('patch', adv_patch_cpu, step=iteration)
+                        self.tracker.log_images('training_images', p_img_batch, step=iteration)
 
                     # Clean up memory
                     if i_batch + 1 >= len(train_loader):
@@ -239,9 +244,17 @@ class InriaPatchTrainer(BasePatchTrainer):
             # Save current patch
             self.save_patch(adv_patch_cpu, epoch, ep_det_loss)
 
-            # Add epoch-level visualizations to TensorBoard
-            self.writer.add_image('patch', adv_patch_cpu, epoch)
-            self.writer.add_image('training_images', torchvision.utils.make_grid(p_img_batch), epoch)
+            # Log epoch-level metrics
+            self.tracker.log_scalars({
+                'epoch/det_loss': ep_det_loss,
+                'epoch/adaIN_loss': ep_adaIN_loss,
+                'epoch/content_loss': ep_c_loss,
+                'epoch/total_loss': ep_loss
+            }, step=epoch)
+
+            # Log epoch-level images
+            self.tracker.log_image('epoch/patch', adv_patch_cpu, step=epoch)
+            self.tracker.log_images('epoch/training_images', p_img_batch, step=epoch)
 
             # Save best patch
             if det_loss.detach().cpu().numpy() < best_det_loss:
@@ -261,5 +274,5 @@ class InriaPatchTrainer(BasePatchTrainer):
             # Final cleanup
             self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, c_loss, loss)
 
-        # Close TensorBoard writer
-        self.writer.close()
+        # Finish experiment tracking
+        self.tracker.finish()

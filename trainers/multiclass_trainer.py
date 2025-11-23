@@ -229,21 +229,25 @@ class MultiClassPatchTrainer(BasePatchTrainer):
                     # Clamp patch values
                     adv_patch_cpu.data.clamp_(0, 1)
 
-                    # TensorBoard logging
+                    # Log metrics to WandB (every 5 batches)
                     if i_batch % 5 == 0:
                         iteration = self.epoch_length * epoch + i_batch
 
-                        self.writer.add_scalar('total_loss', loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('loss/suppress_loss', suppress_loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('loss/enhance_loss', enhance_loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('loss/adain_loss', adain_loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('loss/content_loss', content_loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('loss/tv_loss', tv_loss.detach().cpu().item(), iteration)
-                        self.writer.add_scalar('misc/epoch', epoch, iteration)
-                        self.writer.add_scalar('misc/learning_rate', optimizer.param_groups[0]["lr"], iteration)
+                        # Log scalar metrics
+                        self.tracker.log_scalars({
+                            'total_loss': loss,
+                            'loss/suppress_loss': suppress_loss,
+                            'loss/enhance_loss': enhance_loss,
+                            'loss/adain_loss': adain_loss,
+                            'loss/content_loss': content_loss,
+                            'loss/tv_loss': tv_loss,
+                            'epoch': epoch,
+                            'learning_rate': optimizer.param_groups[0]["lr"]
+                        }, step=iteration)
 
-                        self.writer.add_image('patch', adv_patch_cpu, iteration)
-                        self.writer.add_image('training_images', torchvision.utils.make_grid(p_img_batch), iteration)
+                        # Log images
+                        self.tracker.log_image('patch', adv_patch_cpu, step=iteration)
+                        self.tracker.log_images('training_images', p_img_batch, step=iteration)
 
                     if i_batch + 1 < len(train_loader):
                         # Clean up memory
@@ -262,7 +266,20 @@ class MultiClassPatchTrainer(BasePatchTrainer):
             ep_loss /= len(train_loader)
 
             # Save patch for this epoch
-            self.save_patch(adv_patch_cpu, epoch)
+            self.save_patch(adv_patch_cpu, epoch, ep_suppress_loss)
+
+            # Log epoch-level metrics
+            self.tracker.log_scalars({
+                'epoch/total_loss': ep_loss,
+                'epoch/suppress_loss': ep_suppress_loss,
+                'epoch/enhance_loss': ep_enhance_loss,
+                'epoch/adain_loss': ep_adain_loss,
+                'epoch/content_loss': ep_content_loss,
+                'epoch/tv_loss': ep_tv_loss
+            }, step=epoch)
+
+            # Log epoch-level images
+            self.tracker.log_image('epoch/patch', adv_patch_cpu, step=epoch)
 
             # Save best patch (based on suppress loss)
             if ep_suppress_loss < best_suppress_loss:
@@ -281,5 +298,5 @@ class MultiClassPatchTrainer(BasePatchTrainer):
             print(f'CONTENT LOSS: {ep_content_loss:.4f}')
             print(f'TV LOSS: {ep_tv_loss:.4f}')
 
-        # Close TensorBoard writer
-        self.writer.close()
+        # Finish experiment tracking
+        self.tracker.finish()

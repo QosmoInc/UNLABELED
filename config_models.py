@@ -235,6 +235,33 @@ class MultiClassTargets(BaseModel):
     )
 
 
+class WandBConfig(BaseModel):
+    """Weights & Biases configuration."""
+
+    model_config = ConfigDict(extra='allow')
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable WandB tracking"
+    )
+    project: str = Field(
+        default="adversarial-patch",
+        description="WandB project name"
+    )
+    entity: Optional[str] = Field(
+        default=None,
+        description="WandB entity/username"
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Tags for this run"
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Notes/description for this run"
+    )
+
+
 class TrainingConfig(BaseModel):
     """Complete training configuration.
 
@@ -271,6 +298,10 @@ class TrainingConfig(BaseModel):
     targets: Optional[MultiClassTargets] = Field(
         default=None,
         description="Multi-class targets (for MultiClassPatchTrainer)"
+    )
+    wandb: WandBConfig = Field(
+        default_factory=WandBConfig,
+        description="Weights & Biases configuration"
     )
 
     @model_validator(mode='after')

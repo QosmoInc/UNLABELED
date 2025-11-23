@@ -38,3 +38,11 @@ losses:
 target:
   class_id: 0  # person class in COCO dataset
   objective: minimize
+
+wandb:
+  enabled: true
+  project: adversarial-patch
+  tags:
+    - person-detection
+    - unity-dataset
+  notes: Training adversarial patch for person detection using Unity synthetic data

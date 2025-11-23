@@ -5,14 +5,11 @@ shared across all patch trainer implementations.
 """
 
 import os
-import time
-import subprocess
 from abc import ABC, abstractmethod
 from typing import Any, Optional, TYPE_CHECKING
 
 import torch
 import torchvision.transforms as transforms
-from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
 
 from darknet import Darknet
@@ -24,6 +21,7 @@ from load_data import (
     ContentLoss,
     TotalVariation
 )
+from experiment_tracker import ExperimentTracker
 
 if TYPE_CHECKING:
     from config_models import TrainingConfig
@@ -35,7 +33,7 @@ class BasePatchTrainer(ABC):
     This class provides common functionality for all patch training scenarios:
     - Model initialization (YOLO detection, loss functions)
     - Patch generation and I/O operations
-    - TensorBoard logging setup
+    - Experiment tracking with WandB
     - Device management
 
     Subclasses must implement the train() method with dataset-specific logic.
@@ -86,33 +84,19 @@ class BasePatchTrainer(ABC):
         self.patch_applier: PatchApplier = PatchApplier().to(self.device)
         self.patch_transformer: PatchTransformer = PatchTransformer().to(self.device)
 
-        # Initialize TensorBoard writer
-        self.writer: SummaryWriter = self.init_tensorboard(self.config.patch.name)
+        # Initialize experiment tracker (WandB)
+        self.tracker: ExperimentTracker = ExperimentTracker(
+            config=self.config,
+            experiment_name=self.config.patch.name,
+            enable_wandb=self.config.wandb.enabled,
+            wandb_project=self.config.wandb.project,
+            wandb_entity=self.config.wandb.entity,
+            wandb_tags=self.config.wandb.tags,
+            wandb_notes=self.config.wandb.notes
+        )
 
         # Track epoch length for logging
         self.epoch_length: int = 0
-
-    def init_tensorboard(self, name: Optional[str] = None) -> SummaryWriter:
-        """Initialize TensorBoard logging.
-
-        Args:
-            name: Optional name for the experiment. Timestamped if provided.
-
-        Returns:
-            SummaryWriter instance for logging
-        """
-        # Launch TensorBoard server in background
-        subprocess.Popen(
-            ['tensorboard', '--logdir=runs'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        if name is not None:
-            time_str = time.strftime("%Y%m%d-%H%M%S")
-            return SummaryWriter(f'runs/{time_str}_{name}')
-        else:
-            return SummaryWriter()
 
     def generate_patch(self, patch_type: str = 'gray') -> torch.Tensor:
         """Generate an initial patch as starting point for optimization.
@@ -171,61 +155,39 @@ class BasePatchTrainer(ABC):
         return adv_patch_cpu
 
     def save_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, ep_det_loss: Optional[float] = None) -> None:
-        """Save the current patch to disk.
+        """Save the current patch to disk and track as artifact.
 
         Args:
             adv_patch_cpu: Patch tensor to save
             epoch: Current epoch number (used in filename)
             ep_det_loss: Optional detection loss value (included in filename)
-
-        Raises:
-            OSError: If directory creation or file save fails
         """
-        im = transforms.ToPILImage('RGB')(adv_patch_cpu)
+        if ep_det_loss is None:
+            ep_det_loss = 0.0
 
-        # Ensure output directory exists
-        try:
-            if not os.path.exists('pics'):
-                os.makedirs('pics', exist_ok=True)
-        except OSError as e:
-            raise OSError(f"Failed to create output directory 'pics': {str(e)}")
-
-        # Create filename with epoch and optional loss value
-        if ep_det_loss is not None:
-            filename = f'pics/{epoch}_{ep_det_loss}.png'
-        else:
-            filename = f'pics/{epoch}.png'
-
-        try:
-            im.save(filename, quality=100)
-        except Exception as e:
-            raise OSError(f"Failed to save patch to {filename}: {str(e)}")
+        # Save using experiment tracker
+        self.tracker.save_patch_artifact(
+            patch=adv_patch_cpu,
+            epoch=epoch,
+            loss=ep_det_loss,
+            is_best=False
+        )
 
     def save_best_patch(self, adv_patch_cpu: torch.Tensor, epoch: int, det_loss: float) -> None:
-        """Save the best performing patch so far.
+        """Save the best performing patch so far and track as artifact.
 
         Args:
             adv_patch_cpu: Patch tensor to save
             epoch: Current epoch number
             det_loss: Detection loss value
-
-        Raises:
-            OSError: If directory creation or file save fails
         """
-        im = transforms.ToPILImage('RGB')(adv_patch_cpu)
-
-        # Ensure output directory exists
-        try:
-            if not os.path.exists('pics'):
-                os.makedirs('pics', exist_ok=True)
-        except OSError as e:
-            raise OSError(f"Failed to create output directory 'pics': {str(e)}")
-
-        filename = f'pics/best_{epoch}_{det_loss}.png'
-        try:
-            im.save(filename, quality=100)
-        except Exception as e:
-            raise OSError(f"Failed to save best patch to {filename}: {str(e)}")
+        # Save using experiment tracker
+        self.tracker.save_patch_artifact(
+            patch=adv_patch_cpu,
+            epoch=epoch,
+            loss=det_loss,
+            is_best=True
+        )
 
     def cleanup_memory(self, *tensors: Any) -> None:
         """Clean up GPU memory by deleting tensors and clearing cache.

@@ -172,18 +172,22 @@ class UnityPatchTrainer(BasePatchTrainer):
 
                     bt1 = time.time()
 
-                    # TensorBoard logging
+                    # Log metrics to WandB (every 5 batches)
                     if i_batch % 5 == 0:
                         iteration = self.epoch_length * epoch + i_batch
 
-                        self.writer.add_scalar('total_loss', loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('loss/det_loss', det_loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('loss/adaIN_loss', adaIN_loss.detach().cpu().numpy(), iteration)
-                        self.writer.add_scalar('misc/epoch', epoch, iteration)
-                        self.writer.add_scalar('misc/learning_rate', optimizer.param_groups[0]["lr"], iteration)
+                        # Log scalar metrics
+                        self.tracker.log_scalars({
+                            'total_loss': loss,
+                            'loss/det_loss': det_loss,
+                            'loss/adaIN_loss': adaIN_loss,
+                            'epoch': epoch,
+                            'learning_rate': optimizer.param_groups[0]["lr"]
+                        }, step=iteration)
 
-                        self.writer.add_image('patch', adv_patch_cpu, iteration)
-                        self.writer.add_image('training_images', torchvision.utils.make_grid(p_img_batch), iteration)
+                        # Log images
+                        self.tracker.log_image('patch', adv_patch_cpu, step=iteration)
+                        self.tracker.log_images('training_images', p_img_batch, step=iteration)
 
                     if i_batch + 1 >= len(train_loader):
                         print('\n')
@@ -199,7 +203,19 @@ class UnityPatchTrainer(BasePatchTrainer):
             ep_loss = ep_loss / len(train_loader)
 
             # Save patch for this epoch
-            self.save_patch(adv_patch_cpu, epoch)
+            self.save_patch(adv_patch_cpu, epoch, ep_det_loss)
+
+            # Log epoch-level metrics
+            self.tracker.log_scalars({
+                'epoch/det_loss': ep_det_loss,
+                'epoch/adaIN_loss': ep_adaIN_loss,
+                'epoch/total_loss': ep_loss,
+                'epoch/time': et1 - et0
+            }, step=epoch)
+
+            # Log epoch-level images
+            self.tracker.log_image('epoch/patch', adv_patch_cpu, step=epoch)
+            self.tracker.log_images('epoch/training_images', p_img_batch, step=epoch)
 
             # Save best patch
             if det_loss.detach().cpu().numpy() < best_det_loss:
@@ -221,5 +237,5 @@ class UnityPatchTrainer(BasePatchTrainer):
 
             et0 = time.time()
 
-        # Close TensorBoard writer
-        self.writer.close()
+        # Finish experiment tracking
+        self.tracker.finish()
