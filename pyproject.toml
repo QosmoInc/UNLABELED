@@ -24,3 +24,8 @@ torchvison = [
 name = "torch-cu129"
 url = "https://download.pytorch.org/whl/cu129"
 explicit = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+]

@@ -1,23 +1,25 @@
+from typing import Dict, List, Any, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from numpy.typing import NDArray
 from region_loss import RegionLoss
 from cfg import *
 
 class MaxPoolStride1(nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super(MaxPoolStride1, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.max_pool2d(F.pad(x, (0,1,0,1), mode='replicate'), 2, stride=1)
         return x
 
 class Reorg(nn.Module):
-    def __init__(self, stride=2):
+    def __init__(self, stride: int = 2) -> None:
         super(Reorg, self).__init__()
         self.stride = stride
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         stride = self.stride
         assert(x.data.dim() == 4)
         B = x.data.size(0)
@@ -40,10 +42,10 @@ class Reorg(nn.Module):
         return x
 
 class GlobalAvgPool2d(nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super(GlobalAvgPool2d, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         N = x.data.size(0)
         C = x.data.size(1)
         H = x.data.size(2)
@@ -54,33 +56,34 @@ class GlobalAvgPool2d(nn.Module):
 
 # for route and shortcut
 class EmptyModule(nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super(EmptyModule, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
 
 # support route shortcut and reorg
 class Darknet(nn.Module):
-    def __init__(self, cfgfile):
+    def __init__(self, cfgfile: str) -> None:
         super(Darknet, self).__init__()
-        self.blocks = parse_cfg(cfgfile)
-        self.models = self.create_network(self.blocks) # merge conv, bn,leaky
-        self.loss = self.models[len(self.models)-1]
+        self.blocks: List[Dict[str, Any]] = parse_cfg(cfgfile)
+        self.models: nn.ModuleList = self.create_network(self.blocks) # merge conv, bn,leaky
+        self.loss: Union[RegionLoss, nn.Module] = self.models[len(self.models)-1]
 
-        self.width = int(self.blocks[0]['width'])
-        self.height = int(self.blocks[0]['height'])
+        self.width: int = int(self.blocks[0]['width'])
+        self.height: int = int(self.blocks[0]['height'])
 
         if self.blocks[(len(self.blocks)-1)]['type'] == 'region':
-            self.anchors = self.loss.anchors
-            self.num_anchors = self.loss.num_anchors
-            self.anchor_step = self.loss.anchor_step
-            self.num_classes = self.loss.num_classes
+            # Type ignore: accessing RegionLoss-specific attributes
+            self.anchors: List[float] = self.loss.anchors  # type: ignore[union-attr, assignment]
+            self.num_anchors: int = self.loss.num_anchors  # type: ignore[union-attr, assignment]
+            self.anchor_step: float = self.loss.anchor_step  # type: ignore[union-attr, assignment]
+            self.num_classes: int = self.loss.num_classes  # type: ignore[union-attr, assignment]
 
-        self.header = torch.IntTensor([0,0,0,0])
-        self.seen = 0
+        self.header: torch.Tensor = torch.IntTensor([0,0,0,0])
+        self.seen: int = 0
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         ind = -2
         self.loss = None
         outputs = dict()
@@ -129,14 +132,14 @@ class Darknet(nn.Module):
                 print('unknown type %s' % (block['type']))
         return x
 
-    def print_network(self):
+    def print_network(self) -> None:
         print_cfg(self.blocks)
 
-    def create_network(self, blocks):
+    def create_network(self, blocks: List[Dict[str, Any]]) -> nn.ModuleList:
         models = nn.ModuleList()
-    
+
         prev_filters = 3
-        out_filters =[]
+        out_filters: List[int] = []
         conv_id = 0
         for block in blocks:
             if block['type'] == 'net':
@@ -153,7 +156,7 @@ class Darknet(nn.Module):
                 #pad = (kernel_size-1)/2 if is_pad else 0
                 pad = (kernel_size-1)//2 if is_pad else 0
                 activation = block['activation']
-                model = nn.Sequential()
+                model: nn.Module = nn.Sequential()
                 if batch_normalize:
                     model.add_module('conv{0}'.format(conv_id), nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias=False))
                     model.add_module('bn{0}'.format(conv_id), nn.BatchNorm2d(filters))
@@ -170,29 +173,31 @@ class Darknet(nn.Module):
             elif block['type'] == 'maxpool':
                 pool_size = int(block['size'])
                 stride = int(block['stride'])
+                model_mp: nn.Module
                 if stride > 1:
-                    model = nn.MaxPool2d(pool_size, stride)
+                    model_mp = nn.MaxPool2d(pool_size, stride)
                 else:
-                    model = MaxPoolStride1()
+                    model_mp = MaxPoolStride1()
                 out_filters.append(prev_filters)
-                models.append(model)
+                models.append(model_mp)
             elif block['type'] == 'avgpool':
-                model = GlobalAvgPool2d()
+                model_avg: nn.Module = GlobalAvgPool2d()
                 out_filters.append(prev_filters)
-                models.append(model)
+                models.append(model_avg)
             elif block['type'] == 'softmax':
-                model = nn.Softmax()
+                model_sm: nn.Module = nn.Softmax()
                 out_filters.append(prev_filters)
-                models.append(model)
+                models.append(model_sm)
             elif block['type'] == 'cost':
+                model_cost: nn.Module
                 if block['_type'] == 'sse':
-                    model = nn.MSELoss(size_average=True)
+                    model_cost = nn.MSELoss(size_average=True)
                 elif block['_type'] == 'L1':
-                    model = nn.L1Loss(size_average=True)
+                    model_cost = nn.L1Loss(size_average=True)
                 elif block['_type'] == 'smooth':
-                    model = nn.SmoothL1Loss(size_average=True)
+                    model_cost = nn.SmoothL1Loss(size_average=True)
                 out_filters.append(1)
-                models.append(model)
+                models.append(model_cost)
             elif block['type'] == 'reorg':
                 stride = int(block['stride'])
                 prev_filters = stride * stride * prev_filters
@@ -216,19 +221,20 @@ class Darknet(nn.Module):
                 models.append(EmptyModule())
             elif block['type'] == 'connected':
                 filters = int(block['output'])
+                model_fc: nn.Module
                 if block['activation'] == 'linear':
-                    model = nn.Linear(prev_filters, filters)
+                    model_fc = nn.Linear(prev_filters, filters)
                 elif block['activation'] == 'leaky':
-                    model = nn.Sequential(
+                    model_fc = nn.Sequential(
                                nn.Linear(prev_filters, filters),
                                nn.LeakyReLU(0.1, inplace=True))
                 elif block['activation'] == 'relu':
-                    model = nn.Sequential(
+                    model_fc = nn.Sequential(
                                nn.Linear(prev_filters, filters),
                                nn.ReLU(inplace=True))
                 prev_filters = filters
                 out_filters.append(prev_filters)
-                models.append(model)
+                models.append(model_fc)
             elif block['type'] == 'region':
                 loss = RegionLoss()
                 anchors = block['anchors'].split(',')
@@ -247,12 +253,12 @@ class Darknet(nn.Module):
     
         return models
 
-    def load_weights(self, weightfile):
+    def load_weights(self, weightfile: str) -> None:
         fp = open(weightfile, 'rb')
-        header = np.fromfile(fp, count=4, dtype=np.int32)
+        header: NDArray[np.int32] = np.fromfile(fp, count=4, dtype=np.int32)
         self.header = torch.from_numpy(header)
-        self.seen = self.header[3]
-        buf = np.fromfile(fp, dtype = np.float32)
+        self.seen = int(self.header[3].item())
+        buf: NDArray[np.float32] = np.fromfile(fp, dtype = np.float32)
         fp.close()
 
         start = 0
@@ -267,15 +273,16 @@ class Darknet(nn.Module):
                 model = self.models[ind]
                 batch_normalize = int(block['batch_normalize'])
                 if batch_normalize:
-                    start = load_conv_bn(buf, start, model[0], model[1])
+                    # Type ignore for module indexing as we know it's a Sequential
+                    start = load_conv_bn(buf, start, model[0], model[1])  # type: ignore[index]
                 else:
-                    start = load_conv(buf, start, model[0])
+                    start = load_conv(buf, start, model[0])  # type: ignore[index, arg-type]
             elif block['type'] == 'connected':
                 model = self.models[ind]
                 if block['activation'] != 'linear':
-                    start = load_fc(buf, start, model[0])
+                    start = load_fc(buf, start, model[0])  # type: ignore[index, arg-type]
                 else:
-                    start = load_fc(buf, start, model)
+                    start = load_fc(buf, start, model)  # type: ignore[arg-type]
             elif block['type'] == 'maxpool':
                 pass
             elif block['type'] == 'reorg':
@@ -295,7 +302,7 @@ class Darknet(nn.Module):
             else:
                 print('unknown type %s' % (block['type']))
 
-    def save_weights(self, outfile, cutoff=0):
+    def save_weights(self, outfile: str, cutoff: int = 0) -> None:
         if cutoff <= 0:
             cutoff = len(self.blocks)-1
 
@@ -312,15 +319,15 @@ class Darknet(nn.Module):
                 model = self.models[ind]
                 batch_normalize = int(block['batch_normalize'])
                 if batch_normalize:
-                    save_conv_bn(fp, model[0], model[1])
+                    save_conv_bn(fp, model[0], model[1])  # type: ignore[index, arg-type]
                 else:
-                    save_conv(fp, model[0])
+                    save_conv(fp, model[0])  # type: ignore[index, arg-type]
             elif block['type'] == 'connected':
                 model = self.models[ind]
                 if block['activation'] != 'linear':
-                    save_fc(fc, model)
+                    save_fc(fp, model)  # type: ignore[arg-type]
                 else:
-                    save_fc(fc, model[0])
+                    save_fc(fp, model[0])  # type: ignore[index, arg-type]
             elif block['type'] == 'maxpool':
                 pass
             elif block['type'] == 'reorg':

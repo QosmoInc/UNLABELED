@@ -1,3 +1,4 @@
+from typing import List, Tuple
 import time
 import torch
 import math
@@ -5,11 +6,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils import *
 
-def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW, noobject_scale, object_scale, sil_thresh, seen):
+def build_targets(
+    pred_boxes: torch.Tensor,
+    target: torch.Tensor,
+    anchors: List[float],
+    num_anchors: int,
+    num_classes: int,
+    nH: int,
+    nW: int,
+    noobject_scale: float,
+    object_scale: float,
+    sil_thresh: float,
+    seen: int
+) -> Tuple[int, int, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     nB = target.size(0)
     nA = num_anchors
     nC = num_classes
-    anchor_step = len(anchors)/num_anchors
+    anchor_step = int(len(anchors)/num_anchors)
     conf_mask  = torch.ones(nB, nA, nH, nW) * noobject_scale
     coord_mask = torch.zeros(nB, nA, nH, nW)
     cls_mask   = torch.zeros(nB, nA, nH, nW)
@@ -37,8 +50,8 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
         conf_mask[b][cur_ious>sil_thresh] = 0
     if seen < 12800:
        if anchor_step == 4:
-           tx = torch.FloatTensor(anchors).view(nA, anchor_step).index_select(1, torch.LongTensor([2])).view(1,nA,1,1).repeat(nB,1,nH,nW)
-           ty = torch.FloatTensor(anchors).view(num_anchors, anchor_step).index_select(1, torch.LongTensor([2])).view(1,nA,1,1).repeat(nB,1,nH,nW)
+           tx = torch.FloatTensor(anchors).view(nA, int(anchor_step)).index_select(1, torch.LongTensor([2])).view(1,nA,1,1).repeat(nB,1,nH,nW)
+           ty = torch.FloatTensor(anchors).view(num_anchors, int(anchor_step)).index_select(1, torch.LongTensor([2])).view(1,nA,1,1).repeat(nB,1,nH,nW)
        else:
            tx.fill_(0.5)
            ty.fill_(0.5)
@@ -55,7 +68,7 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
             nGT = nGT + 1
             best_iou = 0.0
             best_n = -1
-            min_dist = 10000
+            min_dist: float = 10000.0
             gx = target[b][t*5+1] * nW
             gy = target[b][t*5+2] * nH
             gi = int(gx)
@@ -64,13 +77,13 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
             gh = target[b][t*5+4]*nH
             gt_box = [0, 0, gw, gh]
             for n in range(nA):
-                aw = anchors[anchor_step*n]
-                ah = anchors[anchor_step*n+1]
+                aw = anchors[int(anchor_step)*n]
+                ah = anchors[int(anchor_step)*n+1]
                 anchor_box = [0, 0, aw, ah]
                 iou  = bbox_iou(anchor_box, gt_box, x1y1x2y2=False)
                 if anchor_step == 4:
-                    ax = anchors[anchor_step*n+2]
-                    ay = anchors[anchor_step*n+3]
+                    ax = anchors[int(anchor_step)*n+2]
+                    ay = anchors[int(anchor_step)*n+3]
                     dist = pow(((gi+ax) - gx), 2) + pow(((gj+ay) - gy), 2)
                 if iou > best_iou:
                     best_iou = iou
@@ -78,7 +91,7 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
                 elif anchor_step==4 and iou == best_iou and dist < min_dist:
                     best_iou = iou
                     best_n = n
-                    min_dist = dist
+                    min_dist = float(dist)
 
             gt_box = [gx, gy, gw, gh]
             pred_box = pred_boxes[b*nAnchors+best_n*nPixels+gj*nW+gi]
@@ -88,8 +101,8 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
             conf_mask[b][best_n][gj][gi] = object_scale
             tx[b][best_n][gj][gi] = target[b][t*5+1] * nW - gi
             ty[b][best_n][gj][gi] = target[b][t*5+2] * nH - gj
-            tw[b][best_n][gj][gi] = math.log(gw/anchors[anchor_step*best_n])
-            th[b][best_n][gj][gi] = math.log(gh/anchors[anchor_step*best_n+1])
+            tw[b][best_n][gj][gi] = math.log(gw/anchors[int(anchor_step)*best_n])
+            th[b][best_n][gj][gi] = math.log(gh/anchors[int(anchor_step)*best_n+1])
             iou = bbox_iou(gt_box, pred_box, x1y1x2y2=False) # best_iou
             tconf[b][best_n][gj][gi] = iou
             tcls[b][best_n][gj][gi] = target[b][t*5]
@@ -99,20 +112,20 @@ def build_targets(pred_boxes, target, anchors, num_anchors, num_classes, nH, nW,
     return nGT, nCorrect, coord_mask, conf_mask, cls_mask, tx, ty, tw, th, tconf, tcls
 
 class RegionLoss(nn.Module):
-    def __init__(self, num_classes=0, anchors=[], num_anchors=1):
+    def __init__(self, num_classes: int = 0, anchors: List[float] = [], num_anchors: int = 1) -> None:
         super(RegionLoss, self).__init__()
-        self.num_classes = num_classes
-        self.anchors = anchors
-        self.num_anchors = num_anchors
-        self.anchor_step = len(anchors)/num_anchors
-        self.coord_scale = 1
-        self.noobject_scale = 1
-        self.object_scale = 5
-        self.class_scale = 1
-        self.thresh = 0.6
-        self.seen = 0
+        self.num_classes: int = num_classes
+        self.anchors: List[float] = anchors
+        self.num_anchors: int = num_anchors
+        self.anchor_step: float = len(anchors)/num_anchors
+        self.coord_scale: float = 1
+        self.noobject_scale: float = 1
+        self.object_scale: float = 5
+        self.class_scale: float = 1
+        self.thresh: float = 0.6
+        self.seen: int = 0
 
-    def forward(self, output, target):
+    def forward(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         #output : BxAs*(4+1+num_classes)*H*W
         t0 = time.time()
         nB = output.data.size(0)
@@ -122,20 +135,20 @@ class RegionLoss(nn.Module):
         nW = output.data.size(3)
 
         output   = output.view(nB, nA, (5+nC), nH, nW)
-        x    = F.sigmoid(output.index_select(2, torch.cuda.LongTensor([0])).view(nB, nA, nH, nW))
-        y    = F.sigmoid(output.index_select(2, torch.cuda.LongTensor([1])).view(nB, nA, nH, nW))
-        w    = output.index_select(2, torch.cuda.LongTensor([2])).view(nB, nA, nH, nW)
-        h    = output.index_select(2, torch.cuda.LongTensor([3])).view(nB, nA, nH, nW)
-        conf = F.sigmoid(output.index_select(2, torch.cuda.LongTensor([4])).view(nB, nA, nH, nW))
+        x    = F.sigmoid(output.index_select(2, torch.tensor([0], dtype=torch.long, device='cuda')).view(nB, nA, nH, nW))
+        y    = F.sigmoid(output.index_select(2, torch.tensor([1], dtype=torch.long, device='cuda')).view(nB, nA, nH, nW))
+        w    = output.index_select(2, torch.tensor([2], dtype=torch.long, device='cuda')).view(nB, nA, nH, nW)
+        h    = output.index_select(2, torch.tensor([3], dtype=torch.long, device='cuda')).view(nB, nA, nH, nW)
+        conf = F.sigmoid(output.index_select(2, torch.tensor([4], dtype=torch.long, device='cuda')).view(nB, nA, nH, nW))
         cls  = output.index_select(2, torch.linspace(5,5+nC-1,nC).long().cuda())
         cls  = cls.view(nB*nA, nC, nH*nW).transpose(1,2).contiguous().view(nB*nA*nH*nW, nC)
         t1 = time.time()
 
-        pred_boxes = torch.cuda.FloatTensor(4, nB*nA*nH*nW)
+        pred_boxes = torch.empty(4, nB*nA*nH*nW, dtype=torch.float32, device='cuda')
         grid_x = torch.linspace(0, nW-1, nW).repeat(nH,1).repeat(nB*nA, 1, 1).view(nB*nA*nH*nW).cuda()
         grid_y = torch.linspace(0, nH-1, nH).repeat(nW,1).t().repeat(nB*nA, 1, 1).view(nB*nA*nH*nW).cuda()
-        anchor_w = torch.Tensor(self.anchors).view(nA, self.anchor_step).index_select(1, torch.LongTensor([0])).cuda()
-        anchor_h = torch.Tensor(self.anchors).view(nA, self.anchor_step).index_select(1, torch.LongTensor([1])).cuda()
+        anchor_w = torch.Tensor(self.anchors).view(nA, int(self.anchor_step)).index_select(1, torch.tensor([0], dtype=torch.long)).cuda()
+        anchor_h = torch.Tensor(self.anchors).view(nA, int(self.anchor_step)).index_select(1, torch.tensor([1], dtype=torch.long)).cuda()
         anchor_w = anchor_w.repeat(nB, 1).repeat(1, 1, nH*nW).view(nB*nA*nH*nW)
         anchor_h = anchor_h.repeat(nB, 1).repeat(1, 1, nH*nW).view(nB*nA*nH*nW)
         pred_boxes[0] = x.data + grid_x

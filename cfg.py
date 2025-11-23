@@ -1,24 +1,28 @@
+from typing import List, Dict, Any, BinaryIO
 import torch
+import torch.nn as nn
+from numpy.typing import NDArray
+import numpy as np
 from utils import convert2cpu
 
-def parse_cfg(cfgfile):
-    blocks = []
+def parse_cfg(cfgfile: str) -> List[Dict[str, Any]]:
+    blocks: List[Dict[str, Any]] = []
     fp = open(cfgfile, 'r')
-    block =  None
+    block: Dict[str, Any] = {}
     line = fp.readline()
     while line != '':
         line = line.rstrip()
         if line == '' or line[0] == '#':
             line = fp.readline()
-            continue        
+            continue
         elif line[0] == '[':
             if block:
                 blocks.append(block)
-            block = dict()
+            block = {}
             block['type'] = line.lstrip('[').rstrip(']')
             # set default value
             if block['type'] == 'convolutional':
-                block['batch_normalize'] = 0
+                block['batch_normalize'] = '0'
         else:
             key,value = line.split('=')
             key = key.strip()
@@ -33,14 +37,14 @@ def parse_cfg(cfgfile):
     fp.close()
     return blocks
 
-def print_cfg(blocks):
+def print_cfg(blocks: List[Dict[str, Any]]) -> None:
     print('layer     filters    size              input                output');
-    prev_width = 416
-    prev_height = 416
+    prev_width: float = 416
+    prev_height: float = 416
     prev_filters = 3
-    out_filters =[]
-    out_widths =[]
-    out_heights =[]
+    out_filters: List[int] = []
+    out_widths: List[float] = []
+    out_heights: List[float] = []
     ind = -2
     for block in blocks:
         ind = ind + 1
@@ -151,7 +155,7 @@ def print_cfg(blocks):
             print('unknown type %s' % (block['type']))
 
 
-def load_conv(buf, start, conv_model):
+def load_conv(buf: NDArray[np.float32], start: int, conv_model: nn.Conv2d) -> int:
     num_w = conv_model.weight.numel()
     num_b = conv_model.bias.numel()
     conv_model.bias.data.copy_(torch.from_numpy(buf[start:start+num_b]));   start = start + num_b
@@ -161,7 +165,7 @@ def load_conv(buf, start, conv_model):
     #conv_model.weight.data.copy_(torch.from_numpy(buf[start:start+num_w])); start = start + num_w
     return start
 
-def save_conv(fp, conv_model):
+def save_conv(fp: BinaryIO, conv_model: nn.Conv2d) -> None:
     if conv_model.bias.is_cuda:
         convert2cpu(conv_model.bias.data).numpy().tofile(fp)
         convert2cpu(conv_model.weight.data).numpy().tofile(fp)
@@ -170,7 +174,7 @@ def save_conv(fp, conv_model):
         conv_model.weight.data.numpy().tofile(fp)
 
 
-def load_conv_bn(buf, start, conv_model, bn_model):
+def load_conv_bn(buf: NDArray[np.float32], start: int, conv_model: nn.Conv2d, bn_model: nn.BatchNorm2d) -> int:
     num_w = conv_model.weight.numel()
     num_b = bn_model.bias.numel()
     bn_model.bias.data.copy_(torch.from_numpy(buf[start:start+num_b]));     start = start + num_b
@@ -183,7 +187,7 @@ def load_conv_bn(buf, start, conv_model, bn_model):
     #conv_model.weight.data.copy_(torch.from_numpy(buf[start:start+num_w])); start = start + num_w
     return start
 
-def save_conv_bn(fp, conv_model, bn_model):
+def save_conv_bn(fp: BinaryIO, conv_model: nn.Conv2d, bn_model: nn.BatchNorm2d) -> None:
     if bn_model.bias.is_cuda:
         convert2cpu(bn_model.bias.data).numpy().tofile(fp)
         convert2cpu(bn_model.weight.data).numpy().tofile(fp)
@@ -197,14 +201,14 @@ def save_conv_bn(fp, conv_model, bn_model):
         bn_model.running_var.numpy().tofile(fp)
         conv_model.weight.data.numpy().tofile(fp)
 
-def load_fc(buf, start, fc_model):
+def load_fc(buf: NDArray[np.float32], start: int, fc_model: nn.Linear) -> int:
     num_w = fc_model.weight.numel()
     num_b = fc_model.bias.numel()
     fc_model.bias.data.copy_(torch.from_numpy(buf[start:start+num_b]));     start = start + num_b
-    fc_model.weight.data.copy_(torch.from_numpy(buf[start:start+num_w]));   start = start + num_w 
+    fc_model.weight.data.copy_(torch.from_numpy(buf[start:start+num_w]));   start = start + num_w
     return start
 
-def save_fc(fp, fc_model):
+def save_fc(fp: BinaryIO, fc_model: nn.Linear) -> None:
     fc_model.bias.data.numpy().tofile(fp)
     fc_model.weight.data.numpy().tofile(fp)
 
