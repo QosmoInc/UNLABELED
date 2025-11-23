@@ -1,0 +1,40 @@
+# Configuration for INRIA Person Detection Patch Training
+# This configuration generates patches that reduce person detection confidence
+
+trainer:
+  type: InriaPatchTrainer
+  mode: paper_obj  # Configuration name from patch_config.py
+
+dataset:
+  type: inria
+  img_dir: inria/Train/pos
+  lab_dir: inria/Train/pos/yolo-labels
+  max_labels: 14
+
+model:
+  cfgfile: cfg/yolov2.cfg
+  weightfile: weights/yolov2.weights
+
+patch:
+  size: 600
+  initial_type: gray  # Options: gray, random, or path to existing image
+  style_image: imgs/210831_meisai+.jpg
+  content_image: imgs/210831_meisai+.jpg
+
+training:
+  batch_size: 4
+  epochs: 300
+  learning_rate: 0.03
+  num_workers: 4
+
+losses:
+  # Weight coefficients for each loss component
+  detection_weight: 1.0
+  adain_weight: 0.0
+  content_weight: 5.0
+  tv_weight: 0.5
+  tv_max: 0.1
+
+target:
+  class_id: 0  # person class in COCO dataset
+  objective: minimize  # minimize detection confidence

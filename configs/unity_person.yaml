@@ -1,0 +1,35 @@
+# Configuration for Unity Person Detection Patch Training
+# This configuration uses Unity-generated synthetic data for patch training
+
+trainer:
+  type: UnityPatchTrainer
+  mode: paper_obj
+
+dataset:
+  type: unity
+  data_dir: train_data_0
+  num_images: 614
+
+model:
+  cfgfile: cfg/yolov2.cfg
+  weightfile: weights/yolov2.weights
+
+patch:
+  size: 600
+  initial_type: imgs/AF_patch_mayuu_01.jpg
+  style_image: imgs/AF_patch_mayuu_01.jpg
+  content_image: imgs/AF_patch_mayuu_01.jpg
+
+training:
+  batch_size: 4
+  epochs: 10000
+  learning_rate: 0.03
+  num_workers: 0  # Unity dataset doesn't support multiprocessing well
+
+losses:
+  detection_weight: 1.0
+  adain_weight: 0.001
+
+target:
+  class_id: 0  # person class in COCO dataset
+  objective: minimize

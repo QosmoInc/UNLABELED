@@ -1,0 +1,44 @@
+# Configuration for Multi-Class Patch Training
+# This configuration suppresses person detection while enhancing bear detection
+
+trainer:
+  type: MultiClassPatchTrainer
+  mode: paper_obj
+
+dataset:
+  type: inria
+  img_dir: inria/Train/pos
+  lab_dir: inria/Train/pos/yolo-labels
+  max_labels: 14
+
+model:
+  cfgfile: cfg/yolov2.cfg
+  weightfile: weights/yolov2.weights
+
+patch:
+  size: 600
+  initial_type: gray
+  style_image: imgs/210825_ダギング_6.jpg
+  content_image: imgs/bear2.jpg
+
+training:
+  batch_size: 4
+  epochs: 300
+  learning_rate: 0.03
+  num_workers: 4
+
+losses:
+  detection_weight: 1.0  # Applied to suppress class
+  adain_weight: 0.0
+  content_weight: 5.0
+  tv_weight: 0.5
+  tv_max: 0.1
+
+targets:
+  # Multi-class configuration
+  suppress:
+    class_id: 0  # person
+    objective: minimize
+  enhance:
+    class_id: 21  # bear
+    objective: maximize
