@@ -8,8 +8,8 @@ import PIL
 import load_data
 from tqdm import tqdm
 
+from darknet import Darknet
 from load_data import (
-    Darknet,
     PatchTransformer,
     PatchApplier,
     MaxProbExtractor,

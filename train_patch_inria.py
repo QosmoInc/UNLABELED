@@ -35,9 +35,9 @@ from PIL import Image
 from tqdm import tqdm
 
 import patch_config
+from darknet import Darknet
 # from unity_dataset import UnityDataset
 from load_data import (
-    Darknet,
     InriaDataset,
     PatchTransformer,
     PatchApplier,
