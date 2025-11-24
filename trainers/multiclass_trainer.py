@@ -136,7 +136,7 @@ class MultiClassPatchTrainer(BasePatchTrainer):
         )
 
         self.epoch_length = len(train_loader)
-        print(f'One epoch is {len(train_loader)}')
+        self.logger.info(f'One epoch is {len(train_loader)} batches')
 
         # Initialize optimizer and scheduler
         optimizer = optim.Adam(
@@ -289,14 +289,14 @@ class MultiClassPatchTrainer(BasePatchTrainer):
             # Update scheduler
             scheduler.step(ep_loss)
 
-            # Print epoch statistics
-            print(f'  EPOCH NR: {epoch}')
-            print(f'EPOCH LOSS: {ep_loss:.4f}')
-            print(f'SUPPRESS LOSS (class {self.suppress_class_id}): {ep_suppress_loss:.4f}')
-            print(f'ENHANCE LOSS (class {self.enhance_class_id}): {ep_enhance_loss:.4f}')
-            print(f'ADAIN LOSS: {ep_adain_loss:.4f}')
-            print(f'CONTENT LOSS: {ep_content_loss:.4f}')
-            print(f'TV LOSS: {ep_tv_loss:.4f}')
+            # Log epoch statistics
+            self.logger.info(f'Epoch {epoch}/{n_epochs}:')
+            self.logger.info(f'  Total Loss:    {ep_loss:.6f}')
+            self.logger.info(f'  Suppress Loss: {ep_suppress_loss:.6f} (class {self.suppress_class_id})')
+            self.logger.info(f'  Enhance Loss:  {ep_enhance_loss:.6f} (class {self.enhance_class_id})')
+            self.logger.info(f'  AdaIN Loss:    {ep_adain_loss:.6f}')
+            self.logger.info(f'  Content Loss:  {ep_content_loss:.6f}')
+            self.logger.info(f'  TV Loss:       {ep_tv_loss:.6f}')
 
         # Finish experiment tracking
         self.tracker.finish()

@@ -37,6 +37,8 @@ import torch
 import torchvision
 from PIL import Image
 
+from logger import setup_logger
+
 if TYPE_CHECKING:
     from config_models import TrainingConfig
 
@@ -81,6 +83,15 @@ class ExperimentTracker:
         self.experiment_name = experiment_name or config.patch.name
         self.enable_wandb = enable_wandb and WANDB_AVAILABLE
 
+        # Setup logger
+        self.logger = setup_logger(
+            name='ExperimentTracker',
+            level=config.logging.level,
+            log_dir=Path(config.logging.log_dir) if config.logging.log_dir else None,
+            console=config.logging.console,
+            file=config.logging.file,
+        )
+
         # Create timestamped output directory for this run
         time_str = time.strftime("%Y%m%d_%H%M%S")
         self.output_dir = Path('outputs') / time_str
@@ -93,8 +104,8 @@ class ExperimentTracker:
         self.wandb_run: Optional[Any] = None
         if self.enable_wandb:
             if not WANDB_AVAILABLE:
-                print('⚠ WandB not available. Install with: uv add wandb')
-                print('  Continuing without experiment tracking...')
+                self.logger.warning('WandB not available. Install with: uv add wandb')
+                self.logger.warning('Continuing without experiment tracking...')
                 self.enable_wandb = False
             else:
                 self._init_wandb(
@@ -147,11 +158,11 @@ class ExperimentTracker:
                 resume='allow'
             )
 
-            print(f'✓ WandB initialized: {self.wandb_run.url}')
+            self.logger.info(f'WandB initialized: {self.wandb_run.url}')
 
         except Exception as e:
-            print(f'⚠ Failed to initialize WandB: {e}')
-            print('  Continuing without experiment tracking...')
+            self.logger.warning(f'Failed to initialize WandB: {e}')
+            self.logger.warning('Continuing without experiment tracking...')
             self.enable_wandb = False
             self.wandb_run = None
 
@@ -185,11 +196,11 @@ class ExperimentTracker:
                     indent=2
                 )
 
-            print(f'✓ Configuration saved to: {config_path}')
+            self.logger.info(f'Configuration saved to: {config_path}')
 
         except Exception as e:
-            print(f'⚠ Failed to save configuration file: {e}')
-            print('  Continuing without config file...')
+            self.logger.warning(f'Failed to save configuration file: {e}')
+            self.logger.warning('Continuing without config file...')
 
     def log_scalar(
         self,
@@ -403,7 +414,7 @@ class ExperimentTracker:
         """Close WandB run."""
         if self.enable_wandb and self.wandb_run is not None:
             wandb.finish()
-            print('✓ WandB run finished')
+            self.logger.info('WandB run finished')
 
     def __enter__(self) -> 'ExperimentTracker':
         """Context manager entry."""

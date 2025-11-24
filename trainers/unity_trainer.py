@@ -107,7 +107,7 @@ class UnityPatchTrainer(BasePatchTrainer):
         )
 
         self.epoch_length = len(train_loader)
-        print(f'One epoch is {len(train_loader)}')
+        self.logger.info(f'One epoch is {len(train_loader)} batches')
 
         # Initialize optimizer and scheduler
         optimizer = optim.Adam(
@@ -189,9 +189,7 @@ class UnityPatchTrainer(BasePatchTrainer):
                         self.tracker.log_image('patch', adv_patch_cpu, step=iteration)
                         self.tracker.log_images('training_images', p_img_batch, step=iteration)
 
-                    if i_batch + 1 >= len(train_loader):
-                        print('\n')
-                    else:
+                    if i_batch + 1 < len(train_loader):
                         # Clean up memory
                         self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, loss)
 
@@ -225,12 +223,13 @@ class UnityPatchTrainer(BasePatchTrainer):
             # Update scheduler
             scheduler.step(ep_loss)
 
-            # Print epoch statistics
-            print('  EPOCH NR: ', epoch)
-            print('EPOCH LOSS: ', ep_loss)
-            print('  DET LOSS: ', ep_det_loss)
-            print('ADAIN LOSS: ', ep_adaIN_loss)
-            print('EPOCH TIME: ', et1 - et0)
+            # Log epoch statistics
+            epoch_time = et1 - et0
+            self.logger.info(f'Epoch {epoch}/{n_epochs}:')
+            self.logger.info(f'  Total Loss: {ep_loss:.6f}')
+            self.logger.info(f'  Det Loss:   {ep_det_loss:.6f}')
+            self.logger.info(f'  AdaIN Loss: {ep_adaIN_loss:.6f}')
+            self.logger.info(f'  Epoch Time: {epoch_time:.2f}s')
 
             # Final cleanup
             self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, loss)

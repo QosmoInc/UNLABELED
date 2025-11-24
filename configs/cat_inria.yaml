@@ -46,3 +46,9 @@ wandb:
     - cat-detection
     - inria-dataset
   notes: Training adversarial patch to minimize cat detection confidence
+
+logging:
+  level: INFO           # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console: true         # Enable console output
+  file: false           # Enable file logging
+  log_dir: logs         # Directory for log files (when file=true)

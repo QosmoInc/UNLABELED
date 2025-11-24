@@ -112,7 +112,7 @@ class InriaPatchTrainer(BasePatchTrainer):
         )
 
         self.epoch_length = len(train_loader)
-        print(f'One epoch is {len(train_loader)} batches')
+        self.logger.info(f'One epoch is {len(train_loader)} batches')
 
         # Setup optimizer
         optimizer = optim.Adam(
@@ -230,9 +230,7 @@ class InriaPatchTrainer(BasePatchTrainer):
                         self.tracker.log_images('training_images', p_img_batch, step=iteration)
 
                     # Clean up memory
-                    if i_batch + 1 >= len(train_loader):
-                        print('\n')
-                    else:
+                    if i_batch + 1 < len(train_loader):
                         self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, c_loss, loss)
 
             # Calculate epoch averages
@@ -267,12 +265,12 @@ class InriaPatchTrainer(BasePatchTrainer):
             # Step learning rate scheduler
             scheduler.step(ep_loss)
 
-            # Print epoch summary
-            print('  EPOCH NR: ', epoch)
-            print('EPOCH LOSS: ', ep_loss)
-            print('  DET LOSS: ', ep_det_loss)
-            print('ADAIN LOSS: ', ep_adaIN_loss)
-            print('    C LOSS: ', ep_c_loss)
+            # Log epoch summary
+            self.logger.info(f'Epoch {epoch}/{n_epochs}:')
+            self.logger.info(f'  Total Loss: {ep_loss:.6f}')
+            self.logger.info(f'  Det Loss:   {ep_det_loss:.6f}')
+            self.logger.info(f'  AdaIN Loss: {ep_adaIN_loss:.6f}')
+            self.logger.info(f'  C Loss:     {ep_c_loss:.6f}')
 
             # Final cleanup
             self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, c_loss, loss)

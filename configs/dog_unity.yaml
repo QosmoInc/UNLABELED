@@ -47,3 +47,9 @@ wandb:
     - dog-detection
     - unity-dataset
   notes: Training adversarial patch to minimize dog detection using Unity synthetic data
+
+logging:
+  level: INFO           # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console: true         # Enable console output
+  file: false           # Enable file logging
+  log_dir: logs         # Directory for log files (when file=true)

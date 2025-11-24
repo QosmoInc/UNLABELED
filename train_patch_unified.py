@@ -40,6 +40,7 @@ import yaml
 
 import trainers
 from config_models import TrainingConfig
+from logger import setup_logger
 
 
 # Trainer type mapping
@@ -124,10 +125,10 @@ def create_trainer(config: TrainingConfig) -> trainers.BasePatchTrainer:
     return trainer
 
 
-def list_available_trainers() -> None:
+def list_available_trainers(logger) -> None:
     """Print available trainer types and exit."""
-    print("\nAvailable Trainer Types:")
-    print("=" * 70)
+    logger.info("\nAvailable Trainer Types:")
+    logger.info("=" * 70)
 
     for name, cls in TRAINER_REGISTRY.items():
         doc = cls.__doc__
@@ -137,12 +138,12 @@ def list_available_trainers() -> None:
         else:
             description = "No description available"
 
-        print(f"\n{name}:")
-        print(f"  {description}")
+        logger.info(f"\n{name}:")
+        logger.info(f"  {description}")
 
-    print("\n" + "=" * 70)
-    print("\nUse --config <config_file.yaml> to specify a training configuration.")
-    print("Example configs are available in the configs/ directory.")
+    logger.info("\n" + "=" * 70)
+    logger.info("\nUse --config <config_file.yaml> to specify a training configuration.")
+    logger.info("Example configs are available in the configs/ directory.")
 
 
 def main() -> None:
@@ -206,9 +207,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Setup basic logger for CLI (will be replaced by config logger later)
+    cli_logger = setup_logger('train_patch_unified', level='INFO')
+
     # Handle --list-trainers
     if args.list_trainers:
-        list_available_trainers()
+        list_available_trainers(cli_logger)
         sys.exit(0)
 
     # Require config file
@@ -217,16 +221,16 @@ def main() -> None:
 
     try:
         # Load configuration using Pydantic
-        print(f"Loading configuration from: {args.config}")
+        cli_logger.info(f"Loading configuration from: {args.config}")
         config = TrainingConfig.from_yaml(args.config)
 
         # Apply command-line overrides
         if any([args.batch_size, args.epochs, args.learning_rate,
                 args.patch_size, args.device]):
-            print("\nApplying command-line overrides...")
+            cli_logger.info("Applying command-line overrides...")
             apply_overrides(config, args)
 
-        # Print final configuration
+        # Print final configuration (use print for YAML dump readability)
         print("\n" + "=" * 70)
         print("Final Configuration:")
         print("=" * 70)
@@ -235,44 +239,44 @@ def main() -> None:
         print("=" * 70)
 
         # Validate configuration
-        print("\nValidating configuration...")
+        cli_logger.info("Validating configuration...")
         config.validate()
-        print("✓ Configuration is valid")
+        cli_logger.info("Configuration is valid")
 
         # Exit if validation only
         if args.validate_only:
-            print("\n--validate-only specified, exiting without training.")
+            cli_logger.info("--validate-only specified, exiting without training.")
             sys.exit(0)
 
         # Create trainer
-        print(f"\nCreating trainer: {config.trainer.type}")
+        cli_logger.info(f"Creating trainer: {config.trainer.type}")
         trainer = create_trainer(config)
 
         # Start training
-        print("\nStarting training...\n")
-        print("=" * 70)
+        cli_logger.info("Starting training...")
+        cli_logger.info("=" * 70)
 
         # Call trainer.train() - trainers should read config internally
         trainer.train()
 
-        print("\n" + "=" * 70)
-        print("Training completed successfully!")
-        print("=" * 70)
+        cli_logger.info("=" * 70)
+        cli_logger.info("Training completed successfully!")
+        cli_logger.info("=" * 70)
 
     except FileNotFoundError as e:
-        print(f"\nError: {e}", file=sys.stderr)
+        cli_logger.error(f"Error: {e}")
         sys.exit(1)
 
     except ValueError as e:
-        print(f"\nConfiguration error: {e}", file=sys.stderr)
+        cli_logger.error(f"Configuration error: {e}")
         sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\n\nTraining interrupted by user.", file=sys.stderr)
+        cli_logger.warning("\nTraining interrupted by user.")
         sys.exit(130)
 
     except Exception as e:
-        print(f"\nUnexpected error: {e}", file=sys.stderr)
+        cli_logger.error(f"Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -8,6 +8,7 @@ import os
 import random
 import numpy as np
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
 import torch
@@ -24,6 +25,7 @@ from load_data import (
     TotalVariation
 )
 from experiment_tracker import ExperimentTracker
+from logger import setup_logger
 
 if TYPE_CHECKING:
     from config_models import TrainingConfig
@@ -60,9 +62,6 @@ class BasePatchTrainer(ABC):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-        print(f'Random seed set to: {seed}')
-        print('Deterministic mode enabled for reproducibility')
-
     def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize the patch trainer.
 
@@ -76,11 +75,22 @@ class BasePatchTrainer(ABC):
         # Store configuration
         self.config: 'TrainingConfig' = config
 
+        # Setup logger
+        self.logger = setup_logger(
+            name=self.__class__.__name__,
+            level=config.logging.level,
+            log_dir=Path(config.logging.log_dir) if config.logging.log_dir else None,
+            console=config.logging.console,
+            file=config.logging.file,
+        )
+
         # Set random seed for reproducibility if specified
         if self.config.training.seed is not None:
+            self.logger.info(f'Setting random seed to: {self.config.training.seed}')
             self.set_seed(self.config.training.seed)
+            self.logger.info('Deterministic mode enabled for reproducibility')
         else:
-            print('No seed specified - training will be non-deterministic')
+            self.logger.info('No seed specified - training will be non-deterministic')
 
         # Device setup with fallback
         # Priority: explicit device arg > config.trainer.device > auto-detect
@@ -90,19 +100,19 @@ class BasePatchTrainer(ABC):
         if device is None:
             if torch.cuda.is_available():
                 self.device: str = 'cuda:0'
-                print('✓ CUDA available - using GPU')
+                self.logger.info('CUDA available - using GPU')
             else:
                 self.device = 'cpu'
-                print('⚠ CUDA not available - falling back to CPU (training will be slower)')
+                self.logger.warning('CUDA not available - falling back to CPU (training will be slower)')
         else:
             self.device = device
             if 'cuda' in device and not torch.cuda.is_available():
-                print(f'⚠ WARNING: Requested device "{device}" but CUDA not available')
-                print('  Falling back to CPU')
+                self.logger.warning(f'Requested device "{device}" but CUDA not available')
+                self.logger.warning('Falling back to CPU')
                 self.device = 'cpu'
 
-        print(f'Device: {self.device}')
-        print('=' * 40)
+        self.logger.info(f'Device: {self.device}')
+        self.logger.info('=' * 40)
 
         # Initialize YOLO detection model
         self.darknet_model: Darknet = Darknet(self.config.model.cfgfile)

@@ -266,6 +266,41 @@ class WandBConfig(BaseModel):
     )
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration for unified logging system."""
+
+    model_config = ConfigDict(extra='allow')
+
+    level: str = Field(
+        default="INFO",
+        description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    )
+    console: bool = Field(
+        default=True,
+        description="Enable console logging"
+    )
+    file: bool = Field(
+        default=False,
+        description="Enable file logging"
+    )
+    log_dir: str = Field(
+        default="logs",
+        description="Directory for log files"
+    )
+
+    @field_validator('level')
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        """Validate logging level."""
+        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        v_upper = v.upper()
+        if v_upper not in valid_levels:
+            raise ValueError(
+                f"Invalid log level: {v}. Must be one of {valid_levels}"
+            )
+        return v_upper
+
+
 class TrainingConfig(BaseModel):
     """Complete training configuration.
 
@@ -306,6 +341,10 @@ class TrainingConfig(BaseModel):
     wandb: WandBConfig = Field(
         default_factory=WandBConfig,
         description="Weights & Biases configuration"
+    )
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig,
+        description="Logging configuration"
     )
 
     @model_validator(mode='after')

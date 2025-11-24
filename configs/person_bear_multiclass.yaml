@@ -51,3 +51,9 @@ wandb:
     - person-detection
     - bear-detection
   notes: Multi-class patch training - suppress person detection while enhancing bear detection
+
+logging:
+  level: INFO           # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console: true         # Enable console output
+  file: false           # Enable file logging
+  log_dir: logs         # Directory for log files (when file=true)
