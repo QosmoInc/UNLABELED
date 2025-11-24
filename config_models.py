@@ -178,6 +178,10 @@ class TrainingParams(BaseModel):
         default=4,
         description="Number of data loader workers"
     )
+    seed: Optional[int] = Field(
+        default=None,
+        description="Random seed for reproducibility. None for non-deterministic training."
+    )
 
 
 class LossWeights(BaseModel):

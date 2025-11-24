@@ -15,17 +15,34 @@ model:
   weightfile: weights/yolov2.weights
 
 patch:
-  size: 600
+  size: 1024
   name: person_inria_patch
   initial_type: gray  # Options: gray, random, image
-  style_image: imgs/210831_meisai+.jpg
-  content_image: imgs/210831_meisai+.jpg
+  # style_image: imgs/2025_11_22/01-1.jpg
+  # content_image: imgs/2025_11_22/01-1.jpg
+  # style_image: imgs/2025_11_22/01-2.jpg
+  # content_image: imgs/2025_11_22/01-2.jpg
+  style_image: imgs/2025_11_22/01-3.jpg
+  content_image: imgs/2025_11_22/01-3.jpg
+  # style_image: imgs/2025_11_22/02-1.jpg
+  # content_image: imgs/2025_11_22/02-1.jpg
+  # style_image: imgs/2025_11_22/02-2.jpg
+  # content_image: imgs/2025_11_22/02-2.jpg
+  # style_image: imgs/2025_11_22/02-3.jpg
+  # content_image: imgs/2025_11_22/02-3.jpg
+  # style_image: imgs/2025_11_22/03-1.jpg
+  # content_image: imgs/2025_11_22/03-1.jpg
+  # style_image: imgs/2025_11_22/03-2.jpg
+  # content_image: imgs/2025_11_22/03-2.jpg
+  # style_image: imgs/2025_11_22/03-3.jpg
+  # content_image: imgs/2025_11_22/03-3.jpg
 
 training:
   batch_size: 8
   epochs: 300
   learning_rate: 0.03
   num_workers: 4
+  seed: 42  # Random seed for reproducibility (set to null for non-deterministic training)
 
 losses:
   detection_weight: 1.0

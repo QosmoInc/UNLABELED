@@ -5,6 +5,8 @@ shared across all patch trainer implementations.
 """
 
 import os
+import random
+import numpy as np
 from abc import ABC, abstractmethod
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -35,9 +37,31 @@ class BasePatchTrainer(ABC):
     - Patch generation and I/O operations
     - Experiment tracking with WandB
     - Device management
+    - Reproducible training with seed setting
 
     Subclasses must implement the train() method with dataset-specific logic.
     """
+
+    @staticmethod
+    def set_seed(seed: int) -> None:
+        """Set random seed for reproducibility.
+
+        Args:
+            seed: Random seed value
+        """
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+
+        # Set deterministic behavior for CUDA operations
+        # Note: This may impact performance
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+        print(f'Random seed set to: {seed}')
+        print('Deterministic mode enabled for reproducibility')
 
     def __init__(self, config: 'TrainingConfig', device: Optional[str] = None) -> None:
         """Initialize the patch trainer.
@@ -51,6 +75,12 @@ class BasePatchTrainer(ABC):
         """
         # Store configuration
         self.config: 'TrainingConfig' = config
+
+        # Set random seed for reproducibility if specified
+        if self.config.training.seed is not None:
+            self.set_seed(self.config.training.seed)
+        else:
+            print('No seed specified - training will be non-deterministic')
 
         # Device setup with fallback
         # Priority: explicit device arg > config.trainer.device > auto-detect

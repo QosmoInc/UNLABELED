@@ -245,16 +245,19 @@ class InriaPatchTrainer(BasePatchTrainer):
             self.save_patch(adv_patch_cpu, epoch, ep_det_loss)
 
             # Log epoch-level metrics
+            # Use iteration-based step to maintain monotonic increasing steps
+            # Set epoch step to be after the last batch of the epoch
+            epoch_step = self.epoch_length * (epoch + 1)
             self.tracker.log_scalars({
                 'epoch/det_loss': ep_det_loss,
                 'epoch/adaIN_loss': ep_adaIN_loss,
                 'epoch/content_loss': ep_c_loss,
                 'epoch/total_loss': ep_loss
-            }, step=epoch)
+            }, step=epoch_step)
 
             # Log epoch-level images
-            self.tracker.log_image('epoch/patch', adv_patch_cpu, step=epoch)
-            self.tracker.log_images('epoch/training_images', p_img_batch, step=epoch)
+            self.tracker.log_image('epoch/patch', adv_patch_cpu, step=epoch_step)
+            self.tracker.log_images('epoch/training_images', p_img_batch, step=epoch_step)
 
             # Save best patch
             if det_loss.detach().cpu().numpy() < best_det_loss:
