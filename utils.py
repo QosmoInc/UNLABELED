@@ -242,7 +242,8 @@ def plot_boxes_cv2(img, boxes, savename=None, class_names=None, color=None):
     return img
 
 # font = ImageFont.truetype("arial.ttf", 44)
-font = ImageFont.truetype("UbuntuMono-B.ttf", 44)
+# font = ImageFont.truetype("UbuntuMono-B.ttf", 44)
+font = ImageFont.truetype("NotoMono-Regular.ttf", 44)
 
 def plot_boxes(img, boxes, savename=None, class_names=None):
     colors = torch.FloatTensor([[1,0,1],[0,0,1],[0,1,1],[0,1,0],[1,1,0],[1,0,0]]);

@@ -199,6 +199,7 @@ class InriaPatchTrainer(BasePatchTrainer):
                     )
 
                     # Accumulate epoch metrics
+                    ep_loss += loss.detach().cpu().numpy()
                     ep_det_loss += det_loss.detach().cpu().numpy()
                     ep_adaIN_loss += adaIN_loss.detach().cpu().numpy()
                     ep_c_loss += c_loss.detach().cpu().numpy()

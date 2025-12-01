@@ -22,12 +22,12 @@ patch:
   # content_image: imgs/2025_11_22/01-1.jpg
   # style_image: imgs/2025_11_22/01-2.jpg
   # content_image: imgs/2025_11_22/01-2.jpg
-  style_image: imgs/2025_11_22/01-3.jpg
-  content_image: imgs/2025_11_22/01-3.jpg
+  # style_image: imgs/2025_11_22/01-3.jpg
+  # content_image: imgs/2025_11_22/01-3.jpg
   # style_image: imgs/2025_11_22/02-1.jpg
   # content_image: imgs/2025_11_22/02-1.jpg
-  # style_image: imgs/2025_11_22/02-2.jpg
-  # content_image: imgs/2025_11_22/02-2.jpg
+  style_image: imgs/2025_11_22/02-2.jpg
+  content_image: imgs/2025_11_22/02-2.jpg
   # style_image: imgs/2025_11_22/02-3.jpg
   # content_image: imgs/2025_11_22/02-3.jpg
   # style_image: imgs/2025_11_22/03-1.jpg
@@ -36,6 +36,36 @@ patch:
   # content_image: imgs/2025_11_22/03-2.jpg
   # style_image: imgs/2025_11_22/03-3.jpg
   # content_image: imgs/2025_11_22/03-3.jpg
+  # style_image: imgs/2025_11_22/04-1.jpg
+  # content_image: imgs/2025_11_22/04-1.jpg
+  # style_image: imgs/2025_11_22/04-2.jpg
+  # content_image: imgs/2025_11_22/04-2.jpg
+  # style_image: imgs/2025_11_22/04-3.jpg
+  # content_image: imgs/2025_11_22/04-3.jpg
+  # style_image: imgs/2025_11_22/05-1.jpg
+  # content_image: imgs/2025_11_22/05-1.jpg
+  # style_image: imgs/2025_11_22/05-2.jpg
+  # content_image: imgs/2025_11_22/05-2.jpg
+  # style_image: imgs/2025_11_22/05-3.jpg
+  # content_image: imgs/2025_11_22/05-3.jpg
+  # style_image: imgs/2025_11_22/06-1.jpg
+  # content_image: imgs/2025_11_22/06-1.jpg
+  # style_image: imgs/2025_11_22/06-2.jpg
+  # content_image: imgs/2025_11_22/06-2.jpg
+  # style_image: imgs/2025_11_22/06-3.jpg
+  # content_image: imgs/2025_11_22/06-3.jpg
+  # style_image: imgs/2025_11_25/hanyo.jpg
+  # content_image: imgs/2025_11_25/hanyo.jpg
+  # style_image: imgs/2025_11_25/hanyo_完成.jpg
+  # content_image: imgs/2025_11_25/hanyo_完成.jpg
+  # style_image: imgs/2025_11_25/hanyo_元.jpg
+  # content_image: imgs/2025_11_25/hanyo_元.jpg
+  # style_image: imgs/2025_11_25/kv.jpg
+  # content_image: imgs/2025_11_25/kv.jpg
+  # style_image: imgs/2025_11_25/kv_完成.jpg
+  # content_image: imgs/2025_11_25/kv_完成.jpg
+  # style_image: imgs/2025_11_25/kv_元.jpg
+  # content_image: imgs/2025_11_25/kv_元.jpg
 
 training:
   batch_size: 8
