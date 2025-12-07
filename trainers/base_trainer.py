@@ -147,16 +147,20 @@ class BasePatchTrainer(ABC):
                 - 'random': Random noise patch
 
         Returns:
-            torch.Tensor: Patch tensor of shape (3, patch_size, patch_size)
+            torch.Tensor: Patch tensor of shape (C, patch_size, patch_size)
+                         where C=1 for mono mode, C=3 for color mode
         """
+        # Determine number of channels based on color mode
+        num_channels = 1 if self.config.patch.color_mode == 'mono' else 3
+
         if patch_type == 'gray':
             adv_patch_cpu = torch.full(
-                (3, self.config.patch.size, self.config.patch.size),
+                (num_channels, self.config.patch.size, self.config.patch.size),
                 0.5
             )
         elif patch_type == 'random':
             adv_patch_cpu = torch.rand(
-                (3, self.config.patch.size, self.config.patch.size)
+                (num_channels, self.config.patch.size, self.config.patch.size)
             )
         else:
             raise ValueError(f"Unknown patch type: {patch_type}. Use 'gray' or 'random'.")
@@ -170,7 +174,8 @@ class BasePatchTrainer(ABC):
             path: Path to the image file
 
         Returns:
-            torch.Tensor: Image tensor resized to (3, patch_size, patch_size)
+            torch.Tensor: Image tensor resized to (C, patch_size, patch_size)
+                         where C=1 for mono mode, C=3 for color mode
 
         Raises:
             FileNotFoundError: If image file doesn't exist
@@ -180,7 +185,11 @@ class BasePatchTrainer(ABC):
             raise FileNotFoundError(f"Image file not found: {path}")
 
         try:
-            patch_img = Image.open(path).convert('RGB')
+            # Load image based on color mode
+            if self.config.patch.color_mode == 'mono':
+                patch_img = Image.open(path).convert('L')  # Grayscale
+            else:
+                patch_img = Image.open(path).convert('RGB')
         except Exception as e:
             raise ValueError(f"Failed to open image {path}: {str(e)}")
 

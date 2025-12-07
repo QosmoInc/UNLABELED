@@ -244,5 +244,9 @@ wandb/
 # Generated patch images
 outputs/
 
+# Claude Code
 CLAUDE.md
 TODO.md
+
+# NAS
+Thumbs.db

@@ -18,6 +18,7 @@ patch:
   size: 1024
   name: person_inria_patch
   initial_type: gray  # Options: gray, random, image
+  color_mode: color  # Options: color, mono (monochrome/grayscale)
   # style_image: imgs/2025_11_22/01-1.jpg
   # content_image: imgs/2025_11_22/01-1.jpg
   # style_image: imgs/2025_11_22/01-2.jpg
@@ -26,8 +27,8 @@ patch:
   # content_image: imgs/2025_11_22/01-3.jpg
   # style_image: imgs/2025_11_22/02-1.jpg
   # content_image: imgs/2025_11_22/02-1.jpg
-  style_image: imgs/2025_11_22/02-2.jpg
-  content_image: imgs/2025_11_22/02-2.jpg
+  # style_image: imgs/2025_11_22/02-2.jpg
+  # content_image: imgs/2025_11_22/02-2.jpg
   # style_image: imgs/2025_11_22/02-3.jpg
   # content_image: imgs/2025_11_22/02-3.jpg
   # style_image: imgs/2025_11_22/03-1.jpg
@@ -66,6 +67,10 @@ patch:
   # content_image: imgs/2025_11_25/kv_完成.jpg
   # style_image: imgs/2025_11_25/kv_元.jpg
   # content_image: imgs/2025_11_25/kv_元.jpg
+  # style_image: imgs/2025_12_04/①219.png
+  # content_image: imgs/2025_12_04/①219.png
+  style_image: imgs/2025_12_08/①219+.png
+  content_image: imgs/2025_12_08/①219+.png
 
 training:
   batch_size: 8
@@ -77,9 +82,10 @@ training:
 losses:
   detection_weight: 1.0
   adain_weight: 0.0
-  content_weight: 5.0
+  content_weight: 12.5
   tv_weight: 0.5
   tv_max: 0.165
+  grayscale_weight: 0.0  # For color_mode='color': set > 0 to enforce grayscale. For 'mono': always 0 (already grayscale)
 
 target:
   class_id: 0  # person class in COCO dataset

@@ -264,7 +264,7 @@ class ExperimentTracker:
 
         Args:
             name: Image name (e.g., 'patch', 'training_images')
-            image: Image tensor (C, H, W) or PIL Image
+            image: Image tensor (C, H, W) or PIL Image - supports 1-ch or 3-ch
             step: Step/iteration number
             caption: Optional caption for the image
         """
@@ -273,6 +273,10 @@ class ExperimentTracker:
 
         # Log to WandB
         if isinstance(image, torch.Tensor):
+            # Expand 1-channel to 3-channel for visualization
+            if image.size(0) == 1:
+                image = image.expand(3, -1, -1)
+
             # Convert to numpy for WandB
             img_np = image.detach().cpu().permute(1, 2, 0).numpy()
             wandb.log({
@@ -322,7 +326,7 @@ class ExperimentTracker:
         """Save patch as artifact and track in WandB.
 
         Args:
-            patch: Patch tensor (3, H, W)
+            patch: Patch tensor (C, H, W) - supports 1-ch or 3-ch
             epoch: Current epoch
             loss: Current loss value
             is_best: Whether this is the best patch so far
@@ -340,7 +344,13 @@ class ExperimentTracker:
 
         # Save patch to file
         from torchvision.transforms import ToPILImage
-        im = ToPILImage('RGB')(patch.detach().cpu())
+        patch_cpu = patch.detach().cpu()
+
+        # Expand 1-channel to 3-channel for saving as RGB
+        if patch_cpu.size(0) == 1:
+            patch_cpu = patch_cpu.expand(3, -1, -1)
+
+        im = ToPILImage('RGB')(patch_cpu)
         im.save(filepath, quality=100)
 
         # Log to WandB as artifact

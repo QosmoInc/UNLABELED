@@ -17,6 +17,7 @@ from .losses import (
     TotalVariation,
     ContentLoss,
     AdaINStyleLoss,
+    GrayscaleLoss,
 )
 
 from .transforms import (
@@ -37,6 +38,7 @@ __all__ = [
     'TotalVariation',
     'ContentLoss',
     'AdaINStyleLoss',
+    'GrayscaleLoss',
     # Transforms
     'PatchTransformer',
     'PatchApplier',

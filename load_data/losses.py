@@ -203,3 +203,39 @@ class AdaINStyleLoss(nn.Module):
             style_loss += F.mse_loss(content_mean, style_mean) + \
                 F.mse_loss(content_std, style_std)
         return style_loss
+
+
+class GrayscaleLoss(nn.Module):
+    """GrayscaleLoss: enforces grayscale/monochrome constraint on patch.
+
+    Calculates the deviation from grayscale by measuring the MSE between
+    each RGB channel and the mean across channels. When this loss is minimized,
+    all RGB channels converge to the same value, producing a grayscale image.
+    """
+
+    def __init__(self) -> None:
+        super(GrayscaleLoss, self).__init__()
+
+    def forward(self, adv_patch: torch.Tensor) -> torch.Tensor:
+        """Calculate grayscale loss.
+
+        Args:
+            adv_patch: Patch tensor of shape (3, H, W) or (B, 3, H, W)
+
+        Returns:
+            torch.Tensor: Scalar loss value representing deviation from grayscale
+        """
+        # Calculate mean across RGB channels
+        # For (3, H, W): mean over dim 0
+        # For (B, 3, H, W): mean over dim 1
+        if adv_patch.dim() == 3:
+            grayscale_mean = adv_patch.mean(dim=0, keepdim=True)  # (1, H, W)
+            grayscale_target = grayscale_mean.expand_as(adv_patch)  # (3, H, W)
+        elif adv_patch.dim() == 4:
+            grayscale_mean = adv_patch.mean(dim=1, keepdim=True)  # (B, 1, H, W)
+            grayscale_target = grayscale_mean.expand_as(adv_patch)  # (B, 3, H, W)
+        else:
+            raise ValueError(f"Expected 3D or 4D tensor, got {adv_patch.dim()}D")
+
+        # MSE between current patch and grayscale version
+        return F.mse_loss(adv_patch, grayscale_target)

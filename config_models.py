@@ -70,6 +70,12 @@ class Objective(str, Enum):
     MAXIMIZE = "maximize"
 
 
+class ColorMode(str, Enum):
+    """Patch color mode."""
+    COLOR = "color"
+    MONO = "mono"  # Monochrome/grayscale
+
+
 # Configuration sub-models
 class TrainerConfig(BaseModel):
     """Trainer configuration."""
@@ -155,6 +161,10 @@ class PatchConfig(BaseModel):
         default=None,
         description="Path to content image for content loss"
     )
+    color_mode: ColorMode = Field(
+        default=ColorMode.COLOR,
+        description="Color mode: 'color' for full RGB, 'mono' for grayscale"
+    )
 
 
 class TrainingParams(BaseModel):
@@ -208,6 +218,10 @@ class LossWeights(BaseModel):
     tv_max: Annotated[float, Field(ge=0.0, le=1.0)] = Field(
         default=0.165,
         description="Maximum total variation value"
+    )
+    grayscale_weight: Annotated[float, Field(ge=0.0)] = Field(
+        default=0.0,
+        description="Weight for grayscale loss (enforces monochrome when color_mode='mono')"
     )
 
 

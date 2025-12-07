@@ -20,7 +20,8 @@ from load_data import (
     MaxProbExtractor,
     AdaINStyleLoss,
     ContentLoss,
-    TotalVariation
+    TotalVariation,
+    GrayscaleLoss
 )
 
 if TYPE_CHECKING:
@@ -55,6 +56,7 @@ class InriaPatchTrainer(BasePatchTrainer):
         self.adaIN_style_loss: AdaINStyleLoss = AdaINStyleLoss().to(self.device)
         self.content_loss: ContentLoss = ContentLoss().to(self.device)
         self.total_variation: TotalVariation = TotalVariation().to(self.device)
+        self.grayscale_loss: GrayscaleLoss = GrayscaleLoss().to(self.device)
 
     def train(self) -> None:
         """Train adversarial patch on INRIA Person Dataset.
@@ -132,6 +134,7 @@ class InriaPatchTrainer(BasePatchTrainer):
             ep_det_loss = 0
             ep_adaIN_loss = 0
             ep_c_loss = 0
+            ep_grayscale_loss = 0
             ep_loss = 0
 
             # Batch loop with progress bar
@@ -148,9 +151,15 @@ class InriaPatchTrainer(BasePatchTrainer):
                     lab_batch = lab_batch.to(self.device)
                     adv_patch = adv_patch_cpu.to(self.device)
 
+                    # Expand 1-channel grayscale patch to 3-channel RGB for processing
+                    if adv_patch.size(0) == 1:
+                        adv_patch_rgb = adv_patch.expand(3, -1, -1)
+                    else:
+                        adv_patch_rgb = adv_patch
+
                     # Transform and apply patches
                     adv_batch_t = self.patch_transformer(
-                        adv_patch,
+                        adv_patch_rgb,
                         lab_batch,
                         img_size,
                         do_rotate=True,
@@ -173,28 +182,39 @@ class InriaPatchTrainer(BasePatchTrainer):
                     det_loss = torch.mean(max_prob) * self.config.losses.detection_weight
 
                     # Style loss: match style of reference image
+                    # Use RGB version for style comparison
                     if orig_img_style is not None and self.config.losses.adain_weight > 0:
                         adaIN_loss = self.adaIN_style_loss(
-                            adv_patch.unsqueeze(0),
+                            adv_patch_rgb.unsqueeze(0),
                             orig_img_style.unsqueeze(0).to(self.device)
                         ) * self.config.losses.adain_weight
                     else:
                         adaIN_loss = torch.tensor(0.0).to(self.device)
 
                     # Content loss: preserve content structure
+                    # Use RGB version for content comparison
                     if orig_img is not None and self.config.losses.content_weight > 0:
-                        c_loss = self.content_loss(adv_patch, orig_img) * self.config.losses.content_weight
+                        c_loss = self.content_loss(adv_patch_rgb, orig_img) * self.config.losses.content_weight
                     else:
                         c_loss = torch.tensor(0.0).to(self.device)
 
                     # Total variation loss: encourage smoothness
+                    # Apply to original patch (works for both 1-ch and 3-ch)
                     tv_loss = self.total_variation(adv_patch) * self.config.losses.tv_weight
+
+                    # Grayscale loss: enforce monochrome constraint
+                    # Note: Only applies to 3-channel patches. 1-channel patches are already grayscale.
+                    if self.config.patch.color_mode == 'color' and self.config.losses.grayscale_weight > 0:
+                        grayscale_loss = self.grayscale_loss(adv_patch_rgb) * self.config.losses.grayscale_weight
+                    else:
+                        grayscale_loss = torch.tensor(0.0).to(self.device)
 
                     # Combined loss
                     loss = (
                         det_loss +
                         adaIN_loss +
                         c_loss +
+                        grayscale_loss +
                         torch.max(tv_loss, torch.tensor(self.config.losses.tv_max).to(self.device))
                     )
 
@@ -203,6 +223,7 @@ class InriaPatchTrainer(BasePatchTrainer):
                     ep_det_loss += det_loss.detach().cpu().numpy()
                     ep_adaIN_loss += adaIN_loss.detach().cpu().numpy()
                     ep_c_loss += c_loss.detach().cpu().numpy()
+                    ep_grayscale_loss += grayscale_loss.detach().cpu().numpy()
 
                     # Backpropagation
                     loss.backward()
@@ -221,6 +242,7 @@ class InriaPatchTrainer(BasePatchTrainer):
                             'loss/det_loss': det_loss,
                             'loss/adaIN_loss': adaIN_loss,
                             'loss/content_loss': c_loss,
+                            'loss/grayscale_loss': grayscale_loss,
                             'loss/tv_loss': tv_loss,
                             'epoch': epoch,
                             'learning_rate': optimizer.param_groups[0]["lr"]
@@ -238,6 +260,7 @@ class InriaPatchTrainer(BasePatchTrainer):
             ep_det_loss = ep_det_loss / len(train_loader)
             ep_adaIN_loss = ep_adaIN_loss / len(train_loader)
             ep_c_loss = ep_c_loss / len(train_loader)
+            ep_grayscale_loss = ep_grayscale_loss / len(train_loader)
             ep_loss = ep_loss / len(train_loader)
 
             # Save current patch
@@ -251,6 +274,7 @@ class InriaPatchTrainer(BasePatchTrainer):
                 'epoch/det_loss': ep_det_loss,
                 'epoch/adaIN_loss': ep_adaIN_loss,
                 'epoch/content_loss': ep_c_loss,
+                'epoch/grayscale_loss': ep_grayscale_loss,
                 'epoch/total_loss': ep_loss
             }, step=epoch_step)
 
@@ -268,10 +292,11 @@ class InriaPatchTrainer(BasePatchTrainer):
 
             # Log epoch summary
             self.logger.info(f'Epoch {epoch}/{n_epochs}:')
-            self.logger.info(f'  Total Loss: {ep_loss:.6f}')
-            self.logger.info(f'  Det Loss:   {ep_det_loss:.6f}')
-            self.logger.info(f'  AdaIN Loss: {ep_adaIN_loss:.6f}')
-            self.logger.info(f'  C Loss:     {ep_c_loss:.6f}')
+            self.logger.info(f'  Total Loss:     {ep_loss:.6f}')
+            self.logger.info(f'  Det Loss:       {ep_det_loss:.6f}')
+            self.logger.info(f'  AdaIN Loss:     {ep_adaIN_loss:.6f}')
+            self.logger.info(f'  Content Loss:   {ep_c_loss:.6f}')
+            self.logger.info(f'  Grayscale Loss: {ep_grayscale_loss:.6f}')
 
             # Final cleanup
             self.cleanup_memory(output, max_prob, det_loss, p_img_batch, adaIN_loss, c_loss, loss)
