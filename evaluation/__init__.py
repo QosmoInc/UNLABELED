@@ -11,11 +11,12 @@ Modules:
 """
 
 from .detectors import BaseDetector, ImageDetector, VideoDetector
-from .patch_evaluator import PatchEvaluator
+# Note: PatchEvaluator temporarily disabled due to dependency on legacy patch_config
+# from .patch_evaluator import PatchEvaluator
 
 __all__ = [
     'BaseDetector',
     'ImageDetector',
     'VideoDetector',
-    'PatchEvaluator',
+    # 'PatchEvaluator',
 ]
