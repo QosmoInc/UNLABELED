@@ -38,7 +38,8 @@ class BaseDetector:
         conf_thresh: float = 0.5,
         nms_thresh: float = 0.4,
         use_cuda: bool = True,
-        verbose: bool = True
+        verbose: bool = True,
+        filter_classes: Optional[List[int]] = None
     ) -> None:
         """Initialize the detector.
 
@@ -49,10 +50,12 @@ class BaseDetector:
             nms_thresh: Non-maximum suppression threshold (0.0-1.0)
             use_cuda: Whether to use CUDA acceleration if available
             verbose: Whether to print detailed information
+            filter_classes: Optional list of class IDs to detect. If None, detect all classes.
         """
         self.verbose = verbose
         self.conf_thresh = conf_thresh
         self.nms_thresh = nms_thresh
+        self.filter_classes = filter_classes
 
         # Load model
         self.model = Darknet(cfgfile)
@@ -77,6 +80,29 @@ class BaseDetector:
             namesfile = 'data/names'
 
         self.class_names = load_class_names(namesfile)
+
+    def _filter_boxes_by_class(self, boxes: List) -> List:
+        """Filter detection boxes by class IDs.
+
+        Args:
+            boxes: List of detection boxes
+
+        Returns:
+            Filtered list of boxes containing only specified classes
+        """
+        if self.filter_classes is None:
+            return boxes
+
+        filtered_boxes = []
+        for box in boxes:
+            if len(box) >= 7:
+                cls_id = int(box[6])
+                if cls_id in self.filter_classes:
+                    filtered_boxes.append(box)
+            else:
+                filtered_boxes.append(box)
+
+        return filtered_boxes
 
     def preprocess_pil_image(self, img: Image.Image) -> Image.Image:
         """Preprocess PIL image for detection.
@@ -121,8 +147,14 @@ class BaseDetector:
         sized = self.preprocess_pil_image(img)
 
         start_time = time.time() if measure_time else None
-        boxes = do_detect(self.model, sized, self.conf_thresh, self.nms_thresh, self.use_cuda)
+        boxes = do_detect(
+            self.model, sized, self.conf_thresh, self.nms_thresh,
+            self.use_cuda
+        )
         inference_time = (time.time() - start_time) if measure_time else None
+
+        # Filter boxes by class if specified
+        boxes = self._filter_boxes_by_class(boxes)
 
         return boxes, inference_time
 
@@ -144,8 +176,14 @@ class BaseDetector:
         sized = self.preprocess_numpy_image(img)
 
         start_time = time.time() if measure_time else None
-        boxes = do_detect(self.model, sized, self.conf_thresh, self.nms_thresh, self.use_cuda)
+        boxes = do_detect(
+            self.model, sized, self.conf_thresh, self.nms_thresh,
+            self.use_cuda
+        )
         inference_time = (time.time() - start_time) if measure_time else None
+
+        # Filter boxes by class if specified
+        boxes = self._filter_boxes_by_class(boxes)
 
         return boxes, inference_time
 

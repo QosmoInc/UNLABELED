@@ -25,8 +25,13 @@ def main() -> None:
     parser.add_argument('--quiet', action='store_true', help='Disable verbose output')
     parser.add_argument('--no-display', action='store_true', help='Disable display window')
     parser.add_argument('--no-fullscreen', action='store_true', help='Disable fullscreen mode')
+    parser.add_argument('--filter-person', action='store_true', help='Filter detections to show only person class')
 
     args = parser.parse_args()
+
+    # Set filter_classes based on --filter-person flag
+    # Person class ID is 0 in COCO dataset
+    filter_classes = [0] if args.filter_person else None
 
     # Create detector
     detector = VideoDetector(
@@ -35,7 +40,8 @@ def main() -> None:
         conf_thresh=args.conf_thresh,
         nms_thresh=args.nms_thresh,
         use_cuda=not args.no_cuda,
-        verbose=not args.quiet
+        verbose=not args.quiet,
+        filter_classes=filter_classes
     )
 
     # Run camera detection
