@@ -3,60 +3,60 @@
 Refactored version of detect_video.py using VideoDetector class.
 """
 
-import sys
+import argparse
 from pathlib import Path
 from evaluation.detectors import VideoDetector
 
 
 def main() -> None:
     """Run detection on a video file."""
-    if len(sys.argv) not in [3, 4]:
-        print('Usage:')
-        print('  python -m evaluation.detect_video cfgfile weightfile video_path [output_dir]')
-        print('')
-        print('Arguments:')
-        print('  video_path: Path to input video file')
-        print('  output_dir: Optional directory to save frame images (default: None)')
-        print('')
-        print('Example:')
-        print('  python -m evaluation.detect_video cfg/yolo.cfg weights/yolo.weights video.mp4')
-        print('  python -m evaluation.detect_video cfg/yolo.cfg weights/yolo.weights video.mp4 output_frames/')
-        print('')
-        print('Press "q" to quit during playback')
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description='Run object detection on a video file (Press "q" to quit during playback)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='Example:\n'
+               '  python -m evaluation.detect_video --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --video-path video.mp4\n'
+               '  python -m evaluation.detect_video --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --video-path video.mp4 --output-dir output_frames/'
+    )
+    parser.add_argument('--cfgfile', type=str, required=True, help='Path to model configuration file')
+    parser.add_argument('--weightfile', type=str, required=True, help='Path to model weights file')
+    parser.add_argument('--video-path', type=str, required=True, help='Path to input video file')
+    parser.add_argument('--output-dir', type=str, default=None, help='Directory to save frame images (default: None)')
+    parser.add_argument('--conf-thresh', type=float, default=0.75, help='Confidence threshold (default: 0.75)')
+    parser.add_argument('--nms-thresh', type=float, default=0.4, help='NMS threshold (default: 0.4)')
+    parser.add_argument('--no-cuda', action='store_true', help='Disable CUDA (use CPU)')
+    parser.add_argument('--quiet', action='store_true', help='Disable verbose output')
+    parser.add_argument('--display', action='store_true', help='Enable display window during processing')
+    parser.add_argument('--no-progress', action='store_true', help='Disable progress bar')
 
-    cfgfile = sys.argv[1]
-    weightfile = sys.argv[2]
-    video_path = sys.argv[3]
-    output_dir = sys.argv[4] if len(sys.argv) == 4 else None
+    args = parser.parse_args()
 
     # Validate video file exists
-    if not Path(video_path).exists():
-        print(f'Error: Video file not found: {video_path}')
-        sys.exit(1)
+    if not Path(args.video_path).exists():
+        print(f'Error: Video file not found: {args.video_path}')
+        return
 
     # Create detector
     detector = VideoDetector(
-        cfgfile=cfgfile,
-        weightfile=weightfile,
-        conf_thresh=0.75,  # Higher threshold for video
-        nms_thresh=0.4,
-        use_cuda=True,
-        verbose=True
+        cfgfile=args.cfgfile,
+        weightfile=args.weightfile,
+        conf_thresh=args.conf_thresh,
+        nms_thresh=args.nms_thresh,
+        use_cuda=not args.no_cuda,
+        verbose=not args.quiet
     )
 
     # Run video detection
     num_frames = detector.detect_video_file(
-        video_path=video_path,
-        output_dir=output_dir,
-        display=False,
-        progress_bar=True
+        video_path=args.video_path,
+        output_dir=args.output_dir,
+        display=args.display,
+        progress_bar=not args.no_progress
     )
 
     print(f'\nVideo detection complete!')
     print(f'Processed {num_frames} frames')
-    if output_dir is not None:
-        print(f'Frames saved to: {output_dir}/')
+    if args.output_dir is not None:
+        print(f'Frames saved to: {args.output_dir}/')
 
 
 if __name__ == '__main__':

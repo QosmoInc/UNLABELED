@@ -3,45 +3,46 @@
 Refactored version of detect_cam.py using VideoDetector class.
 """
 
-import sys
+import argparse
 from evaluation.detectors import VideoDetector
 
 
 def main() -> None:
     """Run detection on camera/webcam stream."""
-    if len(sys.argv) not in [3, 4]:
-        print('Usage:')
-        print('  python -m evaluation.detect_camera cfgfile weightfile [camera_id]')
-        print('')
-        print('Arguments:')
-        print('  camera_id: Camera device ID (default: 0)')
-        print('')
-        print('Example:')
-        print('  python -m evaluation.detect_camera cfg/yolo.cfg weights/yolo.weights')
-        print('  python -m evaluation.detect_camera cfg/yolo.cfg weights/yolo.weights 1')
-        print('')
-        print('Press "q" to quit')
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description='Run object detection on camera/webcam stream (Press "q" to quit)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='Example:\n'
+               '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights\n'
+               '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --camera-id 1'
+    )
+    parser.add_argument('--cfgfile', type=str, required=True, help='Path to model configuration file')
+    parser.add_argument('--weightfile', type=str, required=True, help='Path to model weights file')
+    parser.add_argument('--camera-id', type=int, default=0, help='Camera device ID (default: 0)')
+    parser.add_argument('--conf-thresh', type=float, default=0.5, help='Confidence threshold (default: 0.5)')
+    parser.add_argument('--nms-thresh', type=float, default=0.4, help='NMS threshold (default: 0.4)')
+    parser.add_argument('--no-cuda', action='store_true', help='Disable CUDA (use CPU)')
+    parser.add_argument('--quiet', action='store_true', help='Disable verbose output')
+    parser.add_argument('--no-display', action='store_true', help='Disable display window')
+    parser.add_argument('--no-fullscreen', action='store_true', help='Disable fullscreen mode')
 
-    cfgfile = sys.argv[1]
-    weightfile = sys.argv[2]
-    camera_id = int(sys.argv[3]) if len(sys.argv) == 4 else 0
+    args = parser.parse_args()
 
     # Create detector
     detector = VideoDetector(
-        cfgfile=cfgfile,
-        weightfile=weightfile,
-        conf_thresh=0.5,
-        nms_thresh=0.4,
-        use_cuda=True,
-        verbose=True
+        cfgfile=args.cfgfile,
+        weightfile=args.weightfile,
+        conf_thresh=args.conf_thresh,
+        nms_thresh=args.nms_thresh,
+        use_cuda=not args.no_cuda,
+        verbose=not args.quiet
     )
 
     # Run camera detection
     detector.detect_camera(
-        camera_id=camera_id,
-        display=True,
-        fullscreen=True
+        camera_id=args.camera_id,
+        display=not args.no_display,
+        fullscreen=not args.no_fullscreen
     )
 
     print('Camera detection stopped.')
