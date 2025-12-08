@@ -5,21 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "colorlog>=6.10.1",
+    "numpy>=2.3.5",
+    "opencv-python>=4.11.0.86",
     "pillow>=12.0.0",
-    "pydantic>=2.12.4",
-    "pyyaml>=6.0.3",
-    "torch==2.9.1",
-    "torchvision==0.24.1",
+    "torch==2.9.0",
     "tqdm>=4.67.1",
-    "wandb>=0.23.0",
 ]
 
 [tool.uv.sources]
 torch = [
-    { index = "torch-cu129" },
-]
-torchvison = [
     { index = "torch-cu129" },
 ]
 
@@ -27,8 +21,3 @@ torchvison = [
 name = "torch-cu129"
 url = "https://download.pytorch.org/whl/cu129"
 explicit = true
-
-[dependency-groups]
-dev = [
-    "mypy>=1.18.2",
-]

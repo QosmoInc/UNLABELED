@@ -10,13 +10,9 @@ Modules:
     - check_recognition_rate: Patch effectiveness measurement
 """
 
-from .detectors import BaseDetector, ImageDetector, VideoDetector
-# Note: PatchEvaluator temporarily disabled due to dependency on legacy patch_config
-# from .patch_evaluator import PatchEvaluator
+from .detectors import BaseDetector, VideoDetector
 
 __all__ = [
     'BaseDetector',
-    'ImageDetector',
     'VideoDetector',
-    # 'PatchEvaluator',
 ]
