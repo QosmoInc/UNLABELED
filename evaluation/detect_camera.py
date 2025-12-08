@@ -12,15 +12,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Run object detection on camera/webcam stream (Press "q" to quit)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='Example:\n'
+        epilog='Examples:\n'
                '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights\n'
-               '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --camera-id 1'
+               '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --camera-id 1\n'
+               '  python -m evaluation.detect_camera --cfgfile cfg/yolo.cfg --weightfile weights/yolo.weights --width 1920 --height 1080 --fps 30'
     )
     parser.add_argument('--cfgfile', type=str, required=True, help='Path to model configuration file')
     parser.add_argument('--weightfile', type=str, required=True, help='Path to model weights file')
     parser.add_argument('--camera-id', type=int, default=0, help='Camera device ID (default: 0)')
     parser.add_argument('--conf-thresh', type=float, default=0.5, help='Confidence threshold (default: 0.5)')
     parser.add_argument('--nms-thresh', type=float, default=0.4, help='NMS threshold (default: 0.4)')
+    parser.add_argument('--width', type=int, help='Camera capture width in pixels (e.g., 1920)')
+    parser.add_argument('--height', type=int, help='Camera capture height in pixels (e.g., 1080)')
+    parser.add_argument('--fps', type=int, help='Camera capture frame rate (e.g., 30)')
     parser.add_argument('--no-cuda', action='store_true', help='Disable CUDA (use CPU)')
     parser.add_argument('--quiet', action='store_true', help='Disable verbose output')
     parser.add_argument('--no-display', action='store_true', help='Disable display window')
@@ -48,7 +52,10 @@ def main() -> None:
     detector.detect_camera(
         camera_id=args.camera_id,
         display=not args.no_display,
-        fullscreen=not args.no_fullscreen
+        fullscreen=not args.no_fullscreen,
+        width=args.width,
+        height=args.height,
+        fps=args.fps
     )
 
     print('Camera detection stopped.')

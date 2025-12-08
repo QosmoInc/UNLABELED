@@ -40,6 +40,9 @@ class VideoDetector(BaseDetector):
         camera_id: int = 0,
         display: bool = True,
         fullscreen: bool = True,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        fps: Optional[int] = None,
         callback: Optional[Callable[[np.ndarray, list], None]] = None
     ) -> None:
         """Detect objects from camera/webcam stream.
@@ -48,6 +51,9 @@ class VideoDetector(BaseDetector):
             camera_id: Camera device ID (default: 0 for default camera)
             display: Whether to display results in window
             fullscreen: Whether to use fullscreen mode
+            width: Camera capture width in pixels (default: camera default)
+            height: Camera capture height in pixels (default: camera default)
+            fps: Camera capture frame rate (default: camera default)
             callback: Optional callback function(frame, boxes) called for each frame
         """
         cap = cv2.VideoCapture(camera_id)
@@ -55,8 +61,23 @@ class VideoDetector(BaseDetector):
         if not cap.isOpened():
             raise RuntimeError(f'Failed to open camera {camera_id}')
 
+        # Set camera properties if specified
+        if width is not None:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        if height is not None:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        if fps is not None:
+            cap.set(cv2.CAP_PROP_FPS, fps)
+
+        # Reduce buffer size to minimize latency
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        # Log actual camera settings
         if self.verbose:
-            print(f'Camera {camera_id} opened. Press "q" to quit.')
+            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            actual_fps = int(cap.get(cv2.CAP_PROP_FPS))
+            print(f'Camera {camera_id} opened: {actual_width}x{actual_height} @ {actual_fps}fps. Press "q" to quit.')
 
         try:
             while cap.isOpened():
