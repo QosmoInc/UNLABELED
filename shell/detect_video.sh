@@ -1,1 +1,0 @@
-python detect_video.py cfg/yolo.cfg weights/yolo.weights
