@@ -94,8 +94,8 @@ class VideoDetector(BaseDetector):
 
                 # Display results
                 if display:
+                    cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
                     if fullscreen:
-                        cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
                         cv2.setWindowProperty('Result', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
                     cv2.imshow('Result', result_img)
 
